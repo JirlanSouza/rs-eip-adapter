@@ -81,6 +81,7 @@ impl CipClass for IdentityClass {
     }
 }
 
+#[derive(Debug)]
 pub struct IdentityInstance {
     class: Weak<dyn CipClass>,
     pub vendor_id: u16,
