@@ -1,68 +1,18 @@
 use crate::cip::registry::Registry;
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use command::EncapsulationCommand;
 use error::EncapsulationError;
+use header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader};
 use list_identity::list_identity;
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
 pub mod command;
 mod cpf;
 pub mod error;
+pub mod header;
 mod list_identity;
 
 pub const ENCAPSULATION_PROTOCOL_VERSION: u16 = 1;
-pub const ENCAPSULATION_HEADER_SIZE: usize = 24;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EncapsulationHeader {
-    pub command: EncapsulationCommand,
-    pub length: u16,
-    pub session_handle: u32,
-    pub status: u32,
-    pub context: [u8; 8],
-    pub options: u32,
-}
-
-impl EncapsulationHeader {
-    pub fn decode(in_buff: &mut Bytes) -> Option<Self> {
-        if in_buff.remaining() < ENCAPSULATION_HEADER_SIZE {
-            return None;
-        }
-
-        let command = EncapsulationCommand::from_u16(in_buff.get_u16_le());
-        let length = in_buff.get_u16_le();
-        let session_handle = in_buff.get_u32_le();
-        let status = in_buff.get_u32_le();
-        let mut context = [0u8; 8];
-        in_buff.copy_to_slice(&mut context);
-        let options = in_buff.get_u32_le();
-        Some(Self {
-            command,
-            length,
-            session_handle,
-            status,
-            context,
-            options,
-        })
-    }
-
-    pub fn encode<T: BufMut>(&self, out_buff: &mut T) -> io::Result<()> {
-        if out_buff.remaining_mut() < ENCAPSULATION_HEADER_SIZE {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Insufficient buffer space",
-            ));
-        }
-
-        out_buff.put_u16_le(self.command.to_u16());
-        out_buff.put_u16_le(self.length);
-        out_buff.put_u32_le(self.session_handle);
-        out_buff.put_u32_le(self.status);
-        out_buff.put_slice(&self.context);
-        out_buff.put_u32_le(self.options);
-        Ok(())
-    }
-}
 
 struct Encapsulation {
     header: EncapsulationHeader,

@@ -1,5 +1,5 @@
 use crate::cip::tcp_ip_interface::EIP_RESERVED_PORT;
-use crate::encap::{ENCAPSULATION_HEADER_SIZE, EncapsulationHandler};
+use crate::encap::{EncapsulationHandler, header::ENCAPSULATION_HEADER_SIZE};
 use bytes::BytesMut;
 use std::{io, net::Ipv4Addr};
 use tokio::net::UdpSocket;
