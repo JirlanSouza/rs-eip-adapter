@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, io};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EncapsulationError {
@@ -11,8 +11,8 @@ pub enum EncapsulationError {
     UnsupportedProtocol = 0x0069,
 }
 
-impl Into<u32> for EncapsulationError {
-    fn into(self) -> u32 {
+impl EncapsulationError {
+    pub fn to_u32(self) -> u32 {
         self as u32
     }
 }
@@ -29,6 +29,60 @@ impl Display for EncapsulationError {
             EncapsulationError::InvalidSessionHandle => write!(f, "Invalid session handle"),
             EncapsulationError::InvalidLength => write!(f, "Invalid length"),
             EncapsulationError::UnsupportedProtocol => write!(f, "Unsupported protocol"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum InternalError {
+    Io(io::Error),
+    Other(String),
+}
+
+impl From<io::Error> for InternalError {
+    fn from(err: io::Error) -> Self {
+        InternalError::Io(err)
+    }
+}
+
+impl From<String> for InternalError {
+    fn from(err: String) -> Self {
+        InternalError::Other(err)
+    }
+}
+
+impl Display for InternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InternalError::Io(err) => write!(f, "I/O error: {}", err),
+            InternalError::Other(msg) => write!(f, "Other error: {}", msg),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum HandlerError {
+    Protocol(EncapsulationError),
+    Internal(InternalError),
+}
+
+impl From<EncapsulationError> for HandlerError {
+    fn from(err: EncapsulationError) -> Self {
+        HandlerError::Protocol(err)
+    }
+}
+
+impl From<InternalError> for HandlerError {
+    fn from(err: InternalError) -> Self {
+        HandlerError::Internal(err)
+    }
+}
+
+impl Display for HandlerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HandlerError::Protocol(err) => write!(f, "Protocol error: {}", err),
+            HandlerError::Internal(err) => write!(f, "Internal error: {}", err),
         }
     }
 }

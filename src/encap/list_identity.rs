@@ -7,9 +7,10 @@ use crate::cip::{
 use crate::encap::{
     ENCAPSULATION_PROTOCOL_VERSION,
     cpf::{CpfEncoder, CpfItemId::IdentityItem},
+    error::InternalError,
 };
 
-pub fn list_identity(registry: &Registry, out_buf: &mut BytesMut) -> Result<(), String> {
+pub fn list_identity(registry: &Registry, out_buf: &mut BytesMut) -> Result<(), InternalError> {
     let identity = registry.get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)?;
     let tcp_ip_if =
         registry.get_instance::<TcpIpInterfaceInstance>(CipClassId::TcpIpInterfaceClassId, 1)?;
@@ -34,6 +35,6 @@ pub fn list_identity(registry: &Registry, out_buf: &mut BytesMut) -> Result<(), 
     buf.put_slice(identity.product_name.as_bytes());
     buf.put_u8(identity.state);
     cpf_encoder.finish();
-
+ 
     Ok(())
 }

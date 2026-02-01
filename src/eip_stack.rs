@@ -4,7 +4,7 @@ use crate::cip::{
     registry::Registry,
     tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance},
 };
-use crate::encap::EncapsulationHandler;
+use crate::encap::handler::EncapsulationHandler;
 use crate::transport::udp::UdpTransport;
 use std::sync::Arc;
 use std::{io, net::Ipv4Addr};
