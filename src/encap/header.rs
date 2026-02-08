@@ -129,4 +129,45 @@ mod tests {
         let decoded = EncapsulationHeader::decode(&mut bytes).expect("decode should succeed");
         assert_eq!(decoded, header);
     }
+
+    #[test]
+    fn header_with_unknown_command_roundtrip() {
+        let header = EncapsulationHeader {
+            command: EncapsulationCommand::Unknown(0xbeef),
+            length: 0,
+            session_handle: 0,
+            status: 0,
+            context: [0; 8],
+            options: 0,
+        };
+
+        let mut buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE);
+        header.encode(&mut buf).expect("encode should succeed");
+
+        let mut bytes = buf.freeze();
+        let decoded_header =
+            EncapsulationHeader::decode(&mut bytes).expect("decode should succeed");
+        assert_eq!(decoded_header, header);
+    }
+
+    #[test]
+    fn decode_does_not_consume_extra_bytes() {
+        let header = EncapsulationHeader {
+            command: EncapsulationCommand::ListIdentity,
+            length: 0x0010,
+            session_handle: 0x11223344,
+            status: 0x55667788,
+            context: [1, 2, 3, 4, 5, 6, 7, 8],
+            options: 0x99AABBCC,
+        };
+
+        let mut buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE + 4);
+        header.encode(&mut buf).expect("encode should succeed");
+        buf.put_u32_le(0xdeadbeef); // Extra bytes
+
+        let mut bytes = buf.freeze();
+        let _ = EncapsulationHeader::decode(&mut bytes).expect("decode should succeed");
+        assert_eq!(bytes.remaining(), 4);
+        assert_eq!(bytes.get_u32_le(), 0xdeadbeef);
+    }
 }
