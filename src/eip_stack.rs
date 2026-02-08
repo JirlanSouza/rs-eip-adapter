@@ -2,7 +2,7 @@ use crate::cip::{
     cip_class::CipClass,
     cip_identity::{IdentityClass, IdentityInfo},
     registry::Registry,
-    tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance},
+    tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
 };
 use crate::encap::handler::EncapsulationHandler;
 use crate::transport::udp::UdpTransport;
@@ -27,6 +27,7 @@ impl EipStack {
 pub struct EipConfig {
     pub identity: IdentityInfo,
     pub local_address: Ipv4Addr,
+    pub udp_broadcast_port: u16,
 }
 
 pub struct EipStackBuilder {
@@ -40,6 +41,7 @@ impl EipStackBuilder {
             config: EipConfig {
                 identity,
                 local_address: Ipv4Addr::UNSPECIFIED,
+                udp_broadcast_port: EIP_RESERVED_PORT,
             },
             registry: Registry::new(),
         }
@@ -47,6 +49,11 @@ impl EipStackBuilder {
 
     pub fn with_address(mut self, addr: Ipv4Addr) -> Self {
         self.config.local_address = addr;
+        self
+    }
+    
+    pub fn with_udp_broadcast_port(mut self, port: u16) -> Self {
+        self.config.udp_broadcast_port = port;
         self
     }
 
@@ -68,7 +75,7 @@ impl EipStackBuilder {
 
         let registry = Arc::new(self.registry);
         let handler = EncapsulationHandler::new(registry.clone());
-        let udp_transport = UdpTransport::new(handler).await?;
+        let udp_transport = UdpTransport::new(handler, self.config.udp_broadcast_port).await?;
 
         Ok(EipStack {
             registry,

@@ -1,4 +1,3 @@
-use crate::cip::tcp_ip_interface::EIP_RESERVED_PORT;
 use crate::encap::{handler::EncapsulationHandler, header::ENCAPSULATION_HEADER_SIZE};
 use bytes::BytesMut;
 use std::{io, net::Ipv4Addr};
@@ -10,9 +9,8 @@ pub struct UdpTransport {
 }
 
 impl UdpTransport {
-    pub async fn new(command_dispatcher: EncapsulationHandler) -> io::Result<Self> {
-        let addr = Ipv4Addr::new(0, 0, 0, 0);
-        let broadcast_socket = match UdpSocket::bind((addr, EIP_RESERVED_PORT)).await {
+    pub async fn new(command_dispatcher: EncapsulationHandler, port: u16) -> io::Result<Self> {
+        let broadcast_socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).await {
             Ok(socket) => {
                 log::info!("UDP socket bound to {}", socket.local_addr()?);
                 socket
