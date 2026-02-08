@@ -1,3 +1,4 @@
+use tokio::sync::broadcast::Sender;
 use crate::cip::{
     cip_class::CipClass,
     cip_identity::{IdentityClass, IdentityInfo},
@@ -6,17 +7,27 @@ use crate::cip::{
 };
 use crate::encap::handler::EncapsulationHandler;
 use crate::transport::udp::UdpTransport;
-use std::sync::Arc;
-use std::{io, net::Ipv4Addr};
+use std::{io, net::Ipv4Addr, sync::Arc};
 
 pub struct EipStack {
     registry: Arc<Registry>,
+    shutdown_tx: Sender<()>,
     udp_transport: UdpTransport,
 }
 
 impl EipStack {
     pub async fn start(&self) -> io::Result<()> {
-        self.udp_transport.listen_broadcast().await
+        let shutdown_rc = self.shutdown_tx.subscribe();
+        self.udp_transport.listen_broadcast(shutdown_rc).await
+    }
+
+    pub fn stop(&self) -> io::Result<()> {
+        log::info!("Stopping EIP stack");
+        self.shutdown_tx.send(()).map_err(|err| {
+            log::error!("Error on send shutdown signal: {}", err);
+            io::Error::new(io::ErrorKind::Other, "Error on send shutdown signal")
+        })?;
+        Ok(())
     }
 
     pub fn get_registry(&self) -> Arc<Registry> {
@@ -51,7 +62,7 @@ impl EipStackBuilder {
         self.config.local_address = addr;
         self
     }
-    
+
     pub fn with_udp_broadcast_port(mut self, port: u16) -> Self {
         self.config.udp_broadcast_port = port;
         self
@@ -74,11 +85,13 @@ impl EipStackBuilder {
         self.registry.register(tcp_ip_if_class);
 
         let registry = Arc::new(self.registry);
+        let shutdown_tx = Sender::new(1);
         let handler = EncapsulationHandler::new(registry.clone());
         let udp_transport = UdpTransport::new(handler, self.config.udp_broadcast_port).await?;
 
         Ok(EipStack {
             registry,
+            shutdown_tx,
             udp_transport,
         })
     }
