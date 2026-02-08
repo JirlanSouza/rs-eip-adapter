@@ -10,7 +10,7 @@ pub struct IdentityInfo {
     pub revision_major: u8,
     pub revision_minor: u8,
     pub serial_number: u32,
-    pub product_name: String,
+    pub product_name: &'static str,
 }
 
 use crate::cip::{
@@ -37,7 +37,7 @@ impl IdentityClass {
                 info.revision_minor,
                 0,
                 info.serial_number,
-                info.product_name.clone(),
+                info.product_name,
                 0,
             );
 

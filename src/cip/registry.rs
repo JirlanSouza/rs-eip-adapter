@@ -59,7 +59,7 @@ mod tests {
             revision_major: 1,
             revision_minor: 0,
             serial_number: 0xDEAD_BEEF,
-            product_name: "DeviceA".to_string(),
+            product_name: "DeviceA",
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());
@@ -82,7 +82,7 @@ mod tests {
             revision_major: 1,
             revision_minor: 2,
             serial_number: 0xDEADBEEF,
-            product_name: "TestDevice".to_string(),
+            product_name: "TestDevice",
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());
@@ -116,7 +116,7 @@ mod tests {
             revision_major: 0,
             revision_minor: 0,
             serial_number: 0,
-            product_name: "X".to_string(),
+            product_name: "X",
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());

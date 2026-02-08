@@ -14,7 +14,7 @@ async fn main() -> Result<(), io::Error> {
         revision_major: 0x00,
         revision_minor: 0x00,
         serial_number: 0x00000000,
-        product_name: "Rust EIP Adapter".to_string(),
+        product_name: "Rust EIP Adapter",
     };
 
     let eip_stack = EipStackBuilder::new(identity_info)

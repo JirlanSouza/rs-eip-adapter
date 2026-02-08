@@ -64,7 +64,7 @@ mod tests {
             revision_major: 1,
             revision_minor: 5,
             serial_number: 0xDEADBEEF,
-            product_name: "Test".to_string(),
+            product_name: "Test",
         };
         registry.register(IdentityClass::new(&identity_info));
 
@@ -176,7 +176,7 @@ mod tests {
             revision_major: 1,
             revision_minor: 5,
             serial_number: 0xDEADBEEF,
-            product_name: "Test".to_string(),
+            product_name: "Test",
         };
         registry.register(IdentityClass::new(&identity_info));
 
