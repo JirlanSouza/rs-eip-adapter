@@ -24,7 +24,7 @@ fn create_registry_for_test() -> Arc<Registry> {
         revision_major: 1,
         revision_minor: 0,
         serial_number: 1234,
-        product_name: "Integration Test Device".to_string(),
+        product_name: "Integration Test Device",
     };
     registry_instance.register(IdentityClass::new(&identity_data));
 
