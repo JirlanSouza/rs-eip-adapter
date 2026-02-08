@@ -111,12 +111,17 @@ impl EncapsulationHandler {
     fn dispatch(
         &self,
         header: &EncapsulationHeader,
-        _payload: &Bytes,
+        payload: &Bytes,
         out_buf: &mut BytesMut,
     ) -> Result<(), HandlerError> {
         match header.command {
             EncapsulationCommand::Nop => Ok(()),
             EncapsulationCommand::ListIdentity => {
+                if !payload.is_empty() {
+                    log::warn!("Invalid payload for ListIdentity command: payload_length: {}", payload.len());
+                    return Err(HandlerError::from(EncapsulationError::InvalidLength));
+                }
+                
                 list_identity(&self.registry, out_buf).map_err(|err| {
                     log::error!("Failed to list identity: {}", err);
                     HandlerError::from(err)
