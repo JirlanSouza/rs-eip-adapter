@@ -16,6 +16,10 @@ pub const DEFAULT_IDENTITY_INFO: IdentityInfo = IdentityInfo {
     product_name: "Rust EIP Adapter test",
 };
 pub const LOCAL_ADDRESS: Ipv4Addr = Ipv4Addr::LOCALHOST;
+pub const INVALID_COMMAND_ERROR_CODE: u32 = 0x0001;
+pub const INVALID_LENGTH_ERROR_CODE: u32 = 0x0065;
+pub const TEST_TIMEOUT_MS: u16 = 2000;
+const SERVER_STARTUP_TIMEOUT_MS: u16 = 100;
 
 pub struct TestContext {
     eip_stack: Arc<EipStack>,
@@ -48,7 +52,10 @@ pub async fn run_stack(identity_info: IdentityInfo) -> Result<TestContext, Error
     let eip_stack_clone = eip_stack.clone();
     let server_handle = tokio::spawn(async move { eip_stack_clone.start().await });
 
-    tokio::time::sleep(time::Duration::from_millis(100)).await;
+    tokio::time::sleep(time::Duration::from_millis(
+        SERVER_STARTUP_TIMEOUT_MS as u64,
+    ))
+    .await;
     Ok(TestContext {
         eip_stack,
         server_handle,

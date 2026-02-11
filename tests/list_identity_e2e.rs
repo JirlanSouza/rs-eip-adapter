@@ -2,9 +2,9 @@ use crate::common::{
     eip_stack::{self, DEFAULT_IDENTITY_INFO},
     udp,
 };
-use bytes::BytesMut;
+use bytes::{BufMut, BytesMut};
 use rs_eip_adapter::encap::{
-    command,
+    command::{self, EncapsulationCommand},
     header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
 };
 
@@ -121,5 +121,40 @@ async fn list_identity_success_e2e() {
 
     let state = response_buf[60];
     assert_eq!(state, 0x00);
+    context.stop().await;
+}
+
+#[tokio::test]
+async fn list_identity_with_payload_error() {
+    let context = eip_stack::run_stack(eip_stack::DEFAULT_IDENTITY_INFO)
+        .await
+        .expect("Failed to run EIP stack");
+
+    let request_header = EncapsulationHeader {
+        command: EncapsulationCommand::ListIdentity,
+        length: 4,
+        ..DEFAULT_REQUEST_HEADER
+    };
+
+    let mut request_buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE + 4);
+    request_header
+        .encode(&mut request_buf)
+        .expect("Failed to encode request header");
+    request_buf.put_u32_le(0x12345678);
+
+    let response = udp::send_and_receive(
+        &format!("127.0.0.1:{}", context.udp_broadcast_port),
+        request_buf.freeze(),
+        eip_stack::TEST_TIMEOUT_MS,
+    )
+    .await;
+
+    assert!(response.is_some());
+    let mut response_buf = response.unwrap();
+    let response_header =
+        EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
+
+    assert_eq!(response_header.status, eip_stack::INVALID_LENGTH_ERROR_CODE);
+
     context.stop().await;
 }
