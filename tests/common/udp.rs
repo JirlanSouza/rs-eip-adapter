@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use tokio::net::UdpSocket;
+use tokio::{net::UdpSocket, time};
 
 pub async fn get_free_port() -> u16 {
     let listener = UdpSocket::bind("127.0.0.1:0")
@@ -14,7 +14,11 @@ pub async fn get_free_port() -> u16 {
     port
 }
 
-pub async fn send_and_receive(server_address: &str, request_buf: Bytes) -> Bytes {
+pub async fn send_and_receive(
+    server_address: &str,
+    request_buf: Bytes,
+    timeout: u16,
+) -> Option<Bytes> {
     let client = UdpSocket::bind("127.0.0.1:0")
         .await
         .expect("Error bind client");
@@ -25,10 +29,13 @@ pub async fn send_and_receive(server_address: &str, request_buf: Bytes) -> Bytes
         .expect("Error on send request");
 
     let mut response = [0u8; 1024];
-    let (len, _) = client
-        .recv_from(&mut response)
-        .await
-        .expect("Error receive response");
-
-    Bytes::from(response[..len].to_vec())
+    match time::timeout(
+        std::time::Duration::from_millis(timeout as u64),
+        client.recv_from(&mut response),
+    )
+    .await
+    {
+        Ok(Ok((len, _))) => Some(Bytes::from(response[..len].to_vec())),
+        _ => None,
+    }
 }

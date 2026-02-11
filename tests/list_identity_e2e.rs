@@ -35,12 +35,16 @@ async fn list_identity_success_e2e() {
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 
-    let mut response_buf = udp::send_and_receive(
+    let response = udp::send_and_receive(
         &format!("127.0.0.1:{}", context.udp_broadcast_port),
         request_buf.freeze(),
+        2000,
     )
     .await;
 
+    assert!(response.is_some());
+
+    let mut response_buf = response.unwrap();
     let response_header =
         EncapsulationHeader::decode(&mut response_buf).expect("Error on decode response header");
 
