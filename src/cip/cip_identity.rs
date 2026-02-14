@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
+#[derive(Debug)]
 pub struct IdentityInfo {
     pub vendor_id: u16,
     pub device_type: u16,

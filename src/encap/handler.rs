@@ -19,9 +19,12 @@ impl EncapsulationHandler {
     }
 
     pub fn handle_udp_broadcast(&self, in_buff: Bytes) -> Option<Bytes> {
+        log::info!("Received UDP broadcast packet");
         let mut encapsulation = Encapsulation::decode(in_buff)?;
-
+        log::debug!("Decoded UDP broadcast packet {:?}", encapsulation.header);
+        
         if let Some(err) = encapsulation.validate_length() {
+            log::warn!("Invalid length for UDP broadcast packet: {:?}", err);
             return self.handle_error_reply(&mut encapsulation.header, err);
         }
 
@@ -69,6 +72,7 @@ impl EncapsulationHandler {
         result: Result<(), HandlerError>,
         mut out_buf: BytesMut,
     ) -> Option<Bytes> {
+        log::info!("Handling result for command {:?}", header.command);
         if let Err(err) = result {
             log::warn!("Failed to dispatch command: {}", err);
 
@@ -114,6 +118,7 @@ impl EncapsulationHandler {
         payload: &Bytes,
         out_buf: &mut BytesMut,
     ) -> Result<(), HandlerError> {
+        log::info!("Dispatching command {:?}", header.command);
         match header.command {
             EncapsulationCommand::Nop => Ok(()),
             EncapsulationCommand::ListIdentity => {

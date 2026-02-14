@@ -17,6 +17,7 @@ pub struct EipStack {
 
 impl EipStack {
     pub async fn start(&self) -> io::Result<()> {
+        log::info!("Starting EIP stack");
         let shutdown_rc = self.shutdown_tx.subscribe();
         self.udp_transport.listen_broadcast(shutdown_rc).await
     }
@@ -35,6 +36,7 @@ impl EipStack {
     }
 }
 
+#[derive(Debug)]
 pub struct EipConfig {
     pub identity: IdentityInfo,
     pub local_address: Ipv4Addr,
@@ -69,14 +71,18 @@ impl EipStackBuilder {
     }
 
     pub async fn build(mut self) -> io::Result<EipStack> {
+        log::info!("Building EIP Stack");
+        log::debug!("Building EIP Stack with configuration: {:?}", self.config);
         let identity_class = IdentityClass::new(&self.config.identity);
         self.registry.register(identity_class);
+        log::info!("Registering Identity Class");
 
         let tcp_ip_if_class = Arc::new(TcpIpInterfaceClass::new());
         let tcp_ip_if_instance = Arc::new(TcpIpInterfaceInstance::new(
             Arc::downgrade(&(tcp_ip_if_class.clone() as Arc<dyn CipClass>)),
             self.config.local_address,
         ));
+        log::info!("Registering TCP/IP Interface instance");
 
         tcp_ip_if_class
             .add_instance(tcp_ip_if_instance)

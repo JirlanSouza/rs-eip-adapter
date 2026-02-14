@@ -25,6 +25,7 @@ impl UdpTransport {
     }
 
     pub async fn listen_broadcast(&self, mut shutdown: Receiver<()>) -> io::Result<()> {
+        log::info!("Listening for UDP broadcast packets on {}", self.broadcast_socket.local_addr()?);
         let mut receiv_buf = [0u8; 2048];
         loop {
             tokio::select! {
@@ -32,10 +33,11 @@ impl UdpTransport {
                     let (len, src) = result?;
 
                     if len < ENCAPSULATION_HEADER_SIZE {
-                        log::warn!("Received packet with insufficient length");
+                        log::warn!("Received packet with insufficient length from {}", src);
                         continue;
                     }
 
+                    log::info!("Received packet with {} bytes from {}", len, src);
                     let data_buf = BytesMut::from(&receiv_buf[..len]);
                     let handle_result = self
                         .encapsulation_handler
@@ -52,7 +54,7 @@ impl UdpTransport {
                                 log::info!(
                                     "Reply {} bytes sent successfully to {:?}",
                                     reply_buf.len(),
-                                    src.ip()
+                                    src
                                 );
                             }
                             Err(e) => log::error!("Failed to send reply to {:?}: {}", src.ip(), e),

@@ -17,6 +17,7 @@ impl Registry {
     }
 
     pub fn get(&self, class_id: u16) -> Option<Arc<dyn CipClass>> {
+        log::debug!("Getting class with id {}", class_id);
         self.classes.get(&class_id).cloned()
     }
 
@@ -25,6 +26,7 @@ impl Registry {
         class_id: CipClassId,
         instance_id: u16,
     ) -> Result<Arc<T>, String> {
+        log::debug!("Getting instance of class {} with id {}", class_id, instance_id);
         let class = self
             .get(class_id.to_u16())
             .ok_or(format!("Class {} not found", class_id))?;

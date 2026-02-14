@@ -28,6 +28,7 @@ pub struct CpfEncoder<'a> {
 
 impl<'a> CpfEncoder<'a> {
     pub fn new(buffer: &'a mut BytesMut) -> Self {
+        log::debug!("Creating new CpfEncoder");
         let count_pos = buffer.len();
         buffer.put_u16_le(0);
         Self {
@@ -39,6 +40,7 @@ impl<'a> CpfEncoder<'a> {
     }
 
     pub fn add_item_start(&mut self, item_id: CpfItemId) -> &mut BytesMut {
+        log::debug!("Starting new item with id: {:?}", item_id);
         self.add_item_end();
         self.buffer.put_u16_le(item_id as u16);
 
@@ -52,6 +54,8 @@ impl<'a> CpfEncoder<'a> {
         self.add_item_end();
         let count_bytes = self.item_count.to_le_bytes();
         self.buffer[self.count_pos..self.count_pos + 2].copy_from_slice(&count_bytes);
+        
+        log::debug!("Finished encoding CPF with items count: {}", self.item_count);
     }
 
     fn add_item_end(&mut self) {
@@ -61,6 +65,8 @@ impl<'a> CpfEncoder<'a> {
 
             let len_bytes = data_len.to_le_bytes();
             self.buffer[len_pos..len_pos + 2].copy_from_slice(&len_bytes);
+            
+            log::debug!("Finished encoding item with length: {}", data_len);
         }
     }
 }

@@ -68,6 +68,7 @@ impl CipClass for TcpIpInterfaceClass {
     }
 }
 
+#[derive(Debug)]
 pub struct TcpIpInterfaceInstance {
     class: Weak<dyn CipClass>,
     address: Ipv4Addr,

@@ -14,7 +14,9 @@ pub fn list_identity(registry: &Registry, out_buf: &mut BytesMut) -> Result<(), 
     let identity = registry.get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)?;
     let tcp_ip_if =
         registry.get_instance::<TcpIpInterfaceInstance>(CipClassId::TcpIpInterfaceClassId, 1)?;
-
+    log::debug!("List identiry with TCP/IP Interface: {:?}", tcp_ip_if);
+    log::debug!("List identity with Identity: {:?}", identity);
+    
     let mut cpf_encoder = CpfEncoder::new(out_buf);
     let buf = cpf_encoder.add_item_start(IdentityItem);
 
