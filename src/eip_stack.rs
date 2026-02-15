@@ -1,25 +1,38 @@
-use tokio::sync::broadcast::Sender;
-use crate::cip::{
-    cip_class::CipClass,
-    cip_identity::{IdentityClass, IdentityInfo},
-    registry::Registry,
-    tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
+use crate::{
+    cip::{
+        cip_class::CipClass,
+        cip_identity::{IdentityClass, IdentityInfo},
+        registry::Registry,
+        tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
+    },
+    encap::broadcast_handler::BroadcastHandler,
+    transport::udp::UdpTransport,
 };
-use crate::encap::handler::EncapsulationHandler;
-use crate::transport::udp::UdpTransport;
 use std::{io, net::Ipv4Addr, sync::Arc};
+use tokio::sync::{Mutex, broadcast::Sender};
 
 pub struct EipStack {
     registry: Arc<Registry>,
     shutdown_tx: Sender<()>,
-    udp_transport: UdpTransport,
+    udp_transport: Arc<Mutex<UdpTransport>>,
 }
 
 impl EipStack {
     pub async fn start(&self) -> io::Result<()> {
         log::info!("Starting EIP stack");
         let shutdown_rc = self.shutdown_tx.subscribe();
-        self.udp_transport.listen_broadcast(shutdown_rc).await
+        let udp_transport = self.udp_transport.clone();
+
+        let udp_handle = tokio::spawn(async move {
+            _ = udp_transport
+                .lock()
+                .await
+                .listen_broadcast(shutdown_rc)
+                .await;
+        });
+
+        tokio::try_join!(udp_handle)?;
+        Ok(())
     }
 
     pub fn stop(&self) -> io::Result<()> {
@@ -92,13 +105,16 @@ impl EipStackBuilder {
 
         let registry = Arc::new(self.registry);
         let shutdown_tx = Sender::new(1);
-        let handler = EncapsulationHandler::new(registry.clone());
-        let udp_transport = UdpTransport::new(handler, self.config.udp_broadcast_port).await?;
+        let udp_transport = UdpTransport::new(
+            BroadcastHandler::new(registry.clone()),
+            self.config.udp_broadcast_port,
+        )
+        .await?;
 
         Ok(EipStack {
             registry,
             shutdown_tx,
-            udp_transport,
+            udp_transport: Arc::new(Mutex::new(udp_transport)),
         })
     }
 }

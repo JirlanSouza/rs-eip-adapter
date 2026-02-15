@@ -1,64 +1,15 @@
-use crate::cip::registry::Registry;
 use crate::encap::{
     Encapsulation,
-    command::EncapsulationCommand,
     error::{EncapsulationError, HandlerError},
     header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
-    list_identity::list_identity,
 };
 use bytes::{BufMut, Bytes, BytesMut};
-use std::sync::Arc;
 
-pub struct EncapsulationHandler {
-    registry: Arc<Registry>,
-}
-
-impl EncapsulationHandler {
-    pub fn new(registry: Arc<Registry>) -> Self {
-        Self { registry }
-    }
-
-    pub fn handle_udp_broadcast(&self, in_buff: Bytes) -> Option<Bytes> {
-        log::info!("Received UDP broadcast packet");
-        let mut encapsulation = Encapsulation::decode(in_buff)?;
-        log::debug!("Decoded UDP broadcast packet {:?}", encapsulation.header);
-
-        if let Some(err) = encapsulation.validate_length() {
-            log::warn!("Invalid length for UDP broadcast packet: {:?}", err);
-            return self.handle_error_reply(&mut encapsulation.header, err);
-        }
-
-        if !self.is_valid_broadcast_command(encapsulation.header.command) {
-            log::warn!(
-                "Invalid or unsupported command: {:?} for udp broadcast request",
-                encapsulation.header.command
-            );
-            return self.handle_error_reply(
-                &mut encapsulation.header,
-                EncapsulationError::InvalidOrUnsupportedCommand,
-            );
-        }
-
-        self.handle_request(&mut encapsulation.header, &mut encapsulation.payload)
-    }
-
-    fn is_valid_broadcast_command(&self, command: EncapsulationCommand) -> bool {
-        matches!(
-            command,
-            EncapsulationCommand::ListIdentity
-                | EncapsulationCommand::ListInterfaces
-                | EncapsulationCommand::ListServices
-        )
-    }
-
-    fn handle_request(
-        &self,
-        header: &mut EncapsulationHeader,
-        in_buf: &mut Bytes,
-    ) -> Option<Bytes> {
+pub trait EncapsulationHandler {
+    fn handle_request(&self, encapsulation: &mut Encapsulation) -> Option<Bytes> {
         let mut out_buf = self.alloc_response_buffer();
-        let result = self.dispatch(header, in_buf, &mut out_buf);
-        self.handle_result(header, result, out_buf)
+        let result = self.dispatch(encapsulation, &mut out_buf);
+        self.handle_result(&mut encapsulation.header, result, out_buf)
     }
 
     fn handle_error_reply(
@@ -138,33 +89,7 @@ impl EncapsulationHandler {
 
     fn dispatch(
         &self,
-        header: &EncapsulationHeader,
-        payload: &mut Bytes,
+        encapsulation: &mut Encapsulation,
         out_buf: &mut BytesMut,
-    ) -> Result<(), HandlerError> {
-        log::info!("Dispatching command {:?}", header.command);
-        match header.command {
-            EncapsulationCommand::Nop => Ok(()),
-            EncapsulationCommand::ListIdentity => {
-                if !payload.is_empty() {
-                    log::warn!(
-                        "Invalid payload for ListIdentity command: payload_length: {}",
-                        payload.len()
-                    );
-                    return Err(HandlerError::from(EncapsulationError::InvalidLength));
-                }
-
-                list_identity(&self.registry, out_buf).map_err(|err| {
-                    log::error!("Failed to list identity: {}", err);
-                    HandlerError::from(err)
-                })
-            }
-            _ => {
-                log::warn!("Unsupported command: {:?}", header.command);
-                Err(HandlerError::from(
-                    EncapsulationError::InvalidOrUnsupportedCommand,
-                ))
-            }
-        }
-    }
+    ) -> Result<(), HandlerError>;
 }

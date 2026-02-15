@@ -45,7 +45,10 @@ async fn invalid_command_over_udp_returns_error() {
         EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
 
     assert_eq!(response_header.command, request_header.command);
-    assert_eq!(response_header.status, eip_stack::INVALID_COMMAND_ERROR_CODE);
+    assert_eq!(
+        response_header.status,
+        eip_stack::INVALID_COMMAND_ERROR_CODE
+    );
     assert_eq!(response_header.length, 0);
 
     context.stop().await;
@@ -80,7 +83,10 @@ async fn unimplemented_command_over_udp_returns_error() {
         EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
 
     assert_eq!(response_header.command, request_header.command);
-    assert_eq!(response_header.status, eip_stack::INVALID_COMMAND_ERROR_CODE);
+    assert_eq!(
+        response_header.status,
+        eip_stack::INVALID_COMMAND_ERROR_CODE
+    );
 
     context.stop().await;
 }

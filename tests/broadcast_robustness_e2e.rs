@@ -4,6 +4,7 @@ use rs_eip_adapter::encap::{
     command::EncapsulationCommand,
     header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
 };
+use tokio::sync::oneshot;
 
 mod common;
 

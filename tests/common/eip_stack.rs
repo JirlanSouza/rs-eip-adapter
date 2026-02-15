@@ -38,6 +38,7 @@ impl TestContext {
 }
 
 pub async fn run_stack(identity_info: IdentityInfo) -> Result<TestContext, Error> {
+    let _ = env_logger::try_init();
     let local_address = LOCAL_ADDRESS;
     let udp_broadcast_port = udp::get_free_port().await;
 

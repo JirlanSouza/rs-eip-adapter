@@ -1,4 +1,9 @@
-use crate::encap::{handler::EncapsulationHandler, header::ENCAPSULATION_HEADER_SIZE};
+use crate::encap::{
+    Encapsulation,
+    broadcast_handler::BroadcastHandler,
+    error::{EncapsulationError, FrameError},
+    header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
+};
 use bytes::BytesMut;
 use std::{
     io,
@@ -10,11 +15,11 @@ const MAX_UDP_DATAGRAM_SIZE: usize = 2048;
 
 pub struct UdpTransport {
     broadcast_socket: UdpSocket,
-    encapsulation_handler: EncapsulationHandler,
+    handler: BroadcastHandler,
 }
 
 impl UdpTransport {
-    pub async fn new(command_dispatcher: EncapsulationHandler, port: u16) -> io::Result<Self> {
+    pub async fn new(command_dispatcher: BroadcastHandler, port: u16) -> io::Result<Self> {
         let broadcast_socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).await {
             Ok(socket) => {
                 log::info!("UDP socket bound to {}", socket.local_addr()?);
@@ -25,7 +30,7 @@ impl UdpTransport {
 
         Ok(Self {
             broadcast_socket,
-            encapsulation_handler: command_dispatcher,
+            handler: command_dispatcher,
         })
     }
 
@@ -59,37 +64,65 @@ impl UdpTransport {
 
     async fn handle_datagram(&self, data_buf: BytesMut, src: SocketAddr) {
         if data_buf.len() < ENCAPSULATION_HEADER_SIZE {
-            log::warn!("Received packet with insufficient length from {}", src);
+            log::warn!("Received packet with insufficient length from: {}", src);
             return;
         }
 
-        log::info!("Received packet with {} bytes from {}", data_buf.len(), src);
-
-        let mut handle_result = self
-            .encapsulation_handler
-            .handle_udp_broadcast(data_buf.freeze());
-
-        if handle_result.is_none() {
-            log::info!("No bytes to reply to {:?}", src.ip());
-            return;
-        }
-
-        let reply_buf = handle_result.take().unwrap();
         log::info!(
-            "Sending reply to {:?} with {} bytes",
-            src.ip(),
-            reply_buf.len()
+            "Received packet with: {} bytes from: {}",
+            data_buf.len(),
+            src
         );
 
-        match self.broadcast_socket.send_to(&reply_buf, src).await {
-            Ok(_) => {
-                log::info!(
-                    "Reply {} bytes sent successfully to {:?}",
-                    reply_buf.len(),
+        let mut encapsulation = match Encapsulation::decode(data_buf.freeze()) {
+            Ok(encapsulation) => encapsulation,
+            Err(FrameError::InvalidLength(header, payload_size)) => {
+                log::warn!(
+                    "Invalid length in encapsulation: Header={:?}, PayloadSize={}",
+                    header,
+                    payload_size
+                );
+                let reply_buf_opt = EncapsulationHeader::create_error_response(
+                    header,
+                    EncapsulationError::InvalidLength,
+                );
+                if let Some(reply_buf) = reply_buf_opt {
+                    _ = self.send_reply(&reply_buf, src).await;
+                    return;
+                }
+                log::error!(
+                    "Failed to create error response for InvalidLength to: {}",
                     src
                 );
+                return;
             }
-            Err(e) => log::error!("Failed to send reply to {:?}: {}", src.ip(), e),
+            Err(err) => {
+                log::error!("Failed to decode encapsulation: {}", err);
+                return;
+            }
+        };
+
+        match self.handler.handle(&mut encapsulation) {
+            Some(reply_buf) => {
+                _ = self.send_reply(&reply_buf, src).await;
+            }
+            None => {
+                log::info!("No bytes to reply to {}", src);
+            }
         }
+    }
+
+    async fn send_reply(&self, reply_buf: &[u8], src: SocketAddr) -> io::Result<usize> {
+        log::info!("Sending reply to {} with {} bytes", src, reply_buf.len());
+
+        self.broadcast_socket
+            .send_to(&reply_buf, src)
+            .await
+            .inspect(|bytes_sent| {
+                log::info!("Reply {} bytes sent successfully to {}", bytes_sent, src);
+            })
+            .inspect_err(|e| {
+                log::error!("Failed to send reply to {}: {}", src, e);
+            })
     }
 }

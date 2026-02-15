@@ -1,5 +1,8 @@
-use crate::encap::command::EncapsulationCommand;
-use bytes::{Buf, BufMut, Bytes};
+use crate::encap::{
+    command::EncapsulationCommand,
+    error::{EncapsulationError, FrameError},
+};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::io;
 
 pub const ENCAPSULATION_HEADER_SIZE: usize = 24;
@@ -15,9 +18,9 @@ pub struct EncapsulationHeader {
 }
 
 impl EncapsulationHeader {
-    pub fn decode(in_buff: &mut Bytes) -> Option<Self> {
+    pub fn decode(in_buff: &mut Bytes) -> Result<Self, FrameError> {
         if in_buff.remaining() < ENCAPSULATION_HEADER_SIZE {
-            return None;
+            return Err(FrameError::Inconplete(in_buff.len()));
         }
 
         let command = EncapsulationCommand::from_u16(in_buff.get_u16_le());
@@ -27,7 +30,7 @@ impl EncapsulationHeader {
         let mut context = [0u8; 8];
         in_buff.copy_to_slice(&mut context);
         let options = in_buff.get_u32_le();
-        Some(Self {
+        Ok(Self {
             command,
             length,
             session_handle,
@@ -52,6 +55,20 @@ impl EncapsulationHeader {
         out_buff.put_slice(&self.context);
         out_buff.put_u32_le(self.options);
         Ok(())
+    }
+
+    pub fn create_error_response(
+        mut header: EncapsulationHeader,
+        status: EncapsulationError,
+    ) -> Option<Bytes> {
+        header.status = status.to_u32();
+        header.length = 0;
+        let mut reply_buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE);
+        if header.encode(&mut reply_buf).is_ok() {
+            Some(reply_buf.freeze())
+        } else {
+            None
+        }
     }
 }
 
@@ -82,9 +99,11 @@ mod tests {
     }
 
     #[test]
-    fn decode_returns_none_for_small_buffer() {
+    fn decode_returns_incomplete_for_small_buffer() {
         let mut small = Bytes::from(vec![0u8; ENCAPSULATION_HEADER_SIZE - 1]);
-        assert!(EncapsulationHeader::decode(&mut small).is_none());
+        let result = EncapsulationHeader::decode(&mut small);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), FrameError::Inconplete(small.len()));
     }
 
     #[test]
@@ -163,7 +182,7 @@ mod tests {
 
         let mut buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE + 4);
         header.encode(&mut buf).expect("encode should succeed");
-        buf.put_u32_le(0xdeadbeef); // Extra bytes
+        buf.put_u32_le(0xdeadbeef);
 
         let mut bytes = buf.freeze();
         let _ = EncapsulationHeader::decode(&mut bytes).expect("decode should succeed");

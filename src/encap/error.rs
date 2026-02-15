@@ -1,5 +1,7 @@
 use std::{fmt::Display, io};
 
+use crate::encap::header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader};
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EncapsulationError {
     Success = 0x0000,
@@ -29,6 +31,29 @@ impl Display for EncapsulationError {
             EncapsulationError::InvalidSessionHandle => write!(f, "Invalid session handle"),
             EncapsulationError::InvalidLength => write!(f, "Invalid length"),
             EncapsulationError::UnsupportedProtocol => write!(f, "Unsupported protocol"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum FrameError {
+    Inconplete(usize),
+    InvalidLength(EncapsulationHeader, usize),
+}
+
+impl Display for FrameError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FrameError::Inconplete(length) => write!(
+                f,
+                "Incomplete frame, min expected: {}, got: {}",
+                ENCAPSULATION_HEADER_SIZE, length
+            ),
+            FrameError::InvalidLength(header, payload_length) => write!(
+                f,
+                "Invalid length header length field: {}, payload length: {}",
+                header.length, payload_length
+            ),
         }
     }
 }
