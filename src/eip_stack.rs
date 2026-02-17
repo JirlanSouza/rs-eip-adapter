@@ -5,16 +5,18 @@ use crate::{
         registry::Registry,
         tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
     },
-    encap::broadcast_handler::BroadcastHandler,
-    transport::udp::UdpTransport,
+    encap::{broadcast_handler::BroadcastHandler, session_handler::SessionHandler, session_manager::SessionManager},
+    transport::{tcp::TcpTransport, udp::UdpTransport},
 };
 use std::{io, net::Ipv4Addr, sync::Arc};
 use tokio::sync::{Mutex, broadcast::Sender};
 
 pub struct EipStack {
     registry: Arc<Registry>,
-    shutdown_tx: Sender<()>,
+    session_manager: Arc<Mutex<SessionManager>>,
     udp_transport: Arc<Mutex<UdpTransport>>,
+    tcp_transport: Arc<Mutex<TcpTransport>>,
+    shutdown_tx: Sender<()>,
 }
 
 impl EipStack {
@@ -31,7 +33,11 @@ impl EipStack {
                 .await;
         });
 
-        tokio::try_join!(udp_handle)?;
+        let tcp_transport = self.tcp_transport.clone();
+        let tcp_handle = tokio::spawn(async move {
+            _ = tcp_transport.lock().await.listen_tcp().await;
+        });
+        tokio::try_join!(udp_handle, tcp_handle)?;
         Ok(())
     }
 
@@ -53,6 +59,7 @@ impl EipStack {
 pub struct EipConfig {
     pub identity: IdentityInfo,
     pub local_address: Ipv4Addr,
+    pub tcp_port: u16,
     pub udp_broadcast_port: u16,
 }
 
@@ -67,6 +74,7 @@ impl EipStackBuilder {
             config: EipConfig {
                 identity,
                 local_address: Ipv4Addr::UNSPECIFIED,
+                tcp_port: EIP_RESERVED_PORT,
                 udp_broadcast_port: EIP_RESERVED_PORT,
             },
             registry: Registry::new(),
@@ -75,6 +83,11 @@ impl EipStackBuilder {
 
     pub fn with_address(mut self, addr: Ipv4Addr) -> Self {
         self.config.local_address = addr;
+        self
+    }
+
+    pub fn with_tcp_port(mut self, port: u16) -> Self {
+        self.config.tcp_port = port;
         self
     }
 
@@ -111,10 +124,19 @@ impl EipStackBuilder {
         )
         .await?;
 
+        let tcp_transport = TcpTransport::new(
+            SessionHandler::new(registry.clone(), Arc::new(SessionManager::new())),
+            self.config.tcp_port,
+            shutdown_tx.subscribe(),
+        )
+        .await?;
+
         Ok(EipStack {
             registry,
-            shutdown_tx,
+            session_manager: Arc::new(Mutex::new(SessionManager::new())),
             udp_transport: Arc::new(Mutex::new(udp_transport)),
+            tcp_transport: Arc::new(Mutex::new(tcp_transport)),
+            shutdown_tx,
         })
     }
 }

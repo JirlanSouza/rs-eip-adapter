@@ -1,4 +1,4 @@
-use crate::common::udp;
+use crate::common::{tcp, udp};
 use rs_eip_adapter::{
     cip::cip_identity::IdentityInfo,
     eip_stack::{EipStack, EipStackBuilder},
@@ -41,10 +41,12 @@ pub async fn run_stack(identity_info: IdentityInfo) -> Result<TestContext, Error
     let _ = env_logger::try_init();
     let local_address = LOCAL_ADDRESS;
     let udp_broadcast_port = udp::get_free_port().await;
+    let tcp_port = tcp::get_free_port().await;
 
     let eip_stack = Arc::new(
         EipStackBuilder::new(identity_info)
             .with_address(local_address)
+            .with_tcp_port(tcp_port)
             .with_udp_broadcast_port(udp_broadcast_port)
             .build()
             .await

@@ -10,6 +10,7 @@ pub mod handler;
 pub mod header;
 mod list_identity;
 pub mod session_manager;
+pub mod session_handler;
 
 pub const ENCAPSULATION_PROTOCOL_VERSION: u16 = 1;
 
