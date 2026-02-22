@@ -1,26 +1,36 @@
-use crate::encap::{
-    Encapsulation,
-    broadcast_handler::BroadcastHandler,
-    error::{EncapsulationError, FrameError},
-    header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
-};
-use bytes::BytesMut;
-use std::{
-    io,
-    net::{Ipv4Addr, SocketAddr},
-};
-use tokio::{net::UdpSocket, sync::broadcast::Receiver};
+use futures_util::{sink::SinkExt, stream::StreamExt};
+use std::{io, net::Ipv4Addr, sync::Arc};
+use tokio::{net::UdpSocket, sync::broadcast::Sender};
+use tokio_util::udp::UdpFramed;
 
-const MAX_UDP_DATAGRAM_SIZE: usize = 2048;
+use crate::{
+    encap::handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType},
+    transport::udp_codec::EncapsulationUdpCodec,
+};
 
 pub struct UdpTransport {
-    broadcast_socket: UdpSocket,
-    handler: BroadcastHandler,
+    ip_address: Ipv4Addr,
+    port: u16,
+    handler: Arc<EncapsulationHandler>,
+    shutdown_tx: Arc<Sender<()>>,
 }
 
 impl UdpTransport {
-    pub async fn new(command_dispatcher: BroadcastHandler, port: u16) -> io::Result<Self> {
-        let broadcast_socket = match UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port)).await {
+    pub async fn new(
+        handler: Arc<EncapsulationHandler>,
+        port: u16,
+        shutdown_tx: Arc<Sender<()>>,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            ip_address: Ipv4Addr::UNSPECIFIED,
+            port,
+            handler,
+            shutdown_tx,
+        })
+    }
+
+    pub async fn listen(&self) -> io::Result<()> {
+        let socket = match UdpSocket::bind((self.ip_address, self.port)).await {
             Ok(socket) => {
                 log::info!("UDP socket bound to {}", socket.local_addr()?);
                 socket
@@ -28,32 +38,18 @@ impl UdpTransport {
             Err(err) => return Err(err),
         };
 
-        Ok(Self {
-            broadcast_socket,
-            handler: command_dispatcher,
-        })
-    }
-
-    pub async fn listen_broadcast(&self, mut shutdown: Receiver<()>) -> io::Result<()> {
         log::info!(
             "Listening for UDP broadcast packets on {}",
-            self.broadcast_socket.local_addr()?
+            socket.local_addr()?
         );
-        let mut receiv_buf = [0u8; MAX_UDP_DATAGRAM_SIZE];
+
+        let mut framed = UdpFramed::new(socket, EncapsulationUdpCodec::new());
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
         loop {
             tokio::select! {
-                result = self.broadcast_socket.recv_from(&mut receiv_buf) => {
-                    match result {
-                        Ok((len, src)) => {
-                            self.handle_datagram(BytesMut::from(&receiv_buf[..len]), src).await;
-                        }
-                        Err(err) => {
-                            log::error!("Failed to receive UDP broadcast packet: {}", err);
-                        }
-                    }
-
-                }
-                _ = shutdown.recv() => {
+                _ = self.handle_framed(&mut framed) => {},
+                _ = shutdown_rx.recv() => {
                     log::info!("UDP transport shutting down");
                     break;
                 }
@@ -62,67 +58,34 @@ impl UdpTransport {
         Ok(())
     }
 
-    async fn handle_datagram(&self, data_buf: BytesMut, src: SocketAddr) {
-        if data_buf.len() < ENCAPSULATION_HEADER_SIZE {
-            log::warn!("Received packet with insufficient length from: {}", src);
+    async fn handle_framed(&self, framed: &mut UdpFramed<EncapsulationUdpCodec>) {
+        let frame_result_opt = framed.next().await;
+
+        if frame_result_opt.is_none() {
+            log::error!("Failed to receive UDP frame");
             return;
         }
 
-        log::info!(
-            "Received packet with: {} bytes from: {}",
-            data_buf.len(),
-            src
-        );
+        let frame_result = frame_result_opt.unwrap();
+        if let Ok((mut frame, peer_addr)) = frame_result {
+            let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
 
-        let mut encapsulation = match Encapsulation::decode(data_buf.freeze()) {
-            Ok(encapsulation) => encapsulation,
-            Err(FrameError::InvalidLength(header, payload_size)) => {
-                log::warn!(
-                    "Invalid length in encapsulation: Header={:?}, PayloadSize={}",
-                    header,
-                    payload_size
-                );
-                let reply_buf_opt = EncapsulationHeader::create_error_response(
-                    header,
-                    EncapsulationError::InvalidLength,
-                );
-                if let Some(reply_buf) = reply_buf_opt {
-                    _ = self.send_reply(&reply_buf, src).await;
-                    return;
+            match self.handler.handle(&mut frame, &mut context) {
+                Ok(reply) => {
+                    if let Err(err) = framed.send((reply, peer_addr)).await {
+                        log::error!("Failed to send reply to {} : {}", peer_addr, err);
+                    }
                 }
-                log::error!(
-                    "Failed to create error response for InvalidLength to: {}",
-                    src
-                );
-                return;
+                Err(err) => {
+                    log::error!("Failed to handle request from {} : {}", peer_addr, err);
+                }
             }
-            Err(err) => {
-                log::error!("Failed to decode encapsulation: {}", err);
-                return;
-            }
-        };
-
-        match self.handler.handle(&mut encapsulation) {
-            Some(reply_buf) => {
-                _ = self.send_reply(&reply_buf, src).await;
-            }
-            None => {
-                log::info!("No bytes to reply to {}", src);
-            }
+            return;
         }
-    }
 
-    async fn send_reply(&self, reply_buf: &[u8], src: SocketAddr) -> io::Result<usize> {
-        log::info!("Sending reply to {} with {} bytes", src, reply_buf.len());
-
-        self.broadcast_socket
-            .send_to(&reply_buf, src)
-            .await
-            .inspect(|bytes_sent| {
-                log::info!("Reply {} bytes sent successfully to {}", bytes_sent, src);
-            })
-            .inspect_err(|e| {
-                log::error!("Failed to send reply to {}: {}", src, e);
-            })
+        log::error!(
+            "Failed to decode UDP datagram: {}",
+            frame_result.unwrap_err()
+        );
     }
 }

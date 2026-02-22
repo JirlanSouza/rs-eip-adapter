@@ -1,26 +1,31 @@
-use crate::encap::session_handler::SessionHandler;
-use crate::transport::tcp_connection::TcpConnection;
+use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::broadcast::Receiver,
+    sync::broadcast::Sender,
+};
+use tokio_util::codec::Framed;
+
+use crate::{
+    encap::handler::{ConnectionContext, EncapsulationHandler, TransportType},
+    transport::codec::EncapsulationCodec,
 };
 
-pub const MAX_TCP_BUFFER_SIZE: usize = 2048;
 pub struct TcpTransport {
     tcp_listener: TcpListener,
-    handler: SessionHandler,
-    shutdown: Receiver<()>,
+    handler: Arc<EncapsulationHandler>,
+    shutdown: Arc<Sender<()>>,
 }
 
 impl TcpTransport {
     pub async fn new(
-        command_dispatcher: SessionHandler,
+        handler: Arc<EncapsulationHandler>,
         port: u16,
-        shutdown: Receiver<()>,
+        shutdown: Arc<Sender<()>>,
     ) -> io::Result<Self> {
         let tcp_listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, port)).await {
             Ok(listener) => {
@@ -32,16 +37,18 @@ impl TcpTransport {
 
         Ok(Self {
             tcp_listener,
-            handler: command_dispatcher,
+            handler,
             shutdown,
         })
     }
 
-    pub async fn listen_tcp(&mut self) -> io::Result<()> {
+    pub async fn listen(&mut self) -> io::Result<()> {
         log::info!(
-            "Listening for TCP packets on {}",
+            "Listening for TCP packets on: {}",
             self.tcp_listener.local_addr()?
         );
+
+        let mut accept_shutdown_rx = self.shutdown.subscribe();
         loop {
             tokio::select! {
                 result = self.tcp_listener.accept() => {
@@ -54,7 +61,7 @@ impl TcpTransport {
                         }
                     }
                 }
-                _ = self.shutdown.recv() => {
+                _ = accept_shutdown_rx.recv() => {
                     log::info!("TCP transport shutting down");
                     break;
                 }
@@ -64,50 +71,52 @@ impl TcpTransport {
     }
 
     async fn handle_connection(&mut self, stream: TcpStream, src: SocketAddr) {
-        let mut connection = TcpConnection::new(src, stream, MAX_TCP_BUFFER_SIZE);
+        let mut context = ConnectionContext::new(TransportType::TCP);
+        let mut framed = Framed::new(stream, EncapsulationCodec::new());
+        let mut connection_shutdown_rx = self.shutdown.subscribe();
 
         loop {
             tokio::select! {
-                result = connection.read_message() => {
-                    let encapsulation =  match result {
-                        Ok(encapsulation) => encapsulation,
-                        Err(e) => {
-                            log::error!("Failed to read message from stream: {}, {}", src, e);
-                            break;
-                        }
-                    };
-
-                    let handle_result = self
-                        .handler
-                        .handle(encapsulation);
-
-                    if let Some(reply_buf) = handle_result {
-                        log::info!(
-                            "Sending reply to {:?} with {} bytes",
-                            src.ip(),
-                            reply_buf.len()
-                        );
-                        match connection.write(&reply_buf).await {
-                            Ok(_) => {
-                                log::info!(
-                                    "Reply {} bytes sent successfully to {:?}",
-                                    reply_buf.len(),
-                                    src
-                                );
-                            }
-                            Err(e) => log::error!("Failed to send reply to {:?}: {}", src.ip(), e),
-                        }
-                        continue;
-                    }
-
-                    log::info!("No bytes to reply to {:?}", src.ip());
-                }
-                _ = self.shutdown.recv() => {
+                _ = self.handle_framed(&mut framed, &mut context) => {},
+                _ = connection_shutdown_rx.recv() => {
                     log::info!("TCP connection shutting down: {}", src);
-                    let _ = connection.close().await;
+                    let _ = framed.close().await;
                     break;
                 }
             }
         }
+    }
+
+    async fn handle_framed(
+        &self,
+        framed: &mut Framed<TcpStream, EncapsulationCodec>,
+        context: &mut ConnectionContext,
+    ) {
+        let frame_result_opt = framed.next().await;
+
+        if frame_result_opt.is_none() {
+            log::error!("Failed to receive TCP frame");
+            return;
+        }
+
+        let frame_result = frame_result_opt.unwrap();
+        if let Ok(mut frame) = frame_result {
+            match self.handler.handle(&mut frame, context) {
+                Ok(reply) => {
+                    if let Err(err) = framed.send(reply).await {
+                        log::error!("Failed to send reply: {}", err);
+                    }
+                }
+                Err(err) => {
+                    log::error!("Failed to handle request: {}", err);
+                }
+            }
+            return;
+        }
+
+        log::error!(
+            "Failed to decode TCP datagram: {}",
+            frame_result.unwrap_err()
+        );
     }
 }
