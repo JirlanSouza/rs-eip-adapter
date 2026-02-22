@@ -1,3 +1,4 @@
+pub mod codec;
 pub mod tcp;
-pub mod tcp_connection;
 pub mod udp;
+pub mod udp_codec;
