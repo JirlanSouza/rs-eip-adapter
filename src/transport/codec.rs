@@ -63,27 +63,24 @@ impl Decoder for EncapsulationCodec {
 impl Encoder<Encapsulation> for EncapsulationCodec {
     type Error = std::io::Error;
 
-    fn encode(&mut self, _item: Encapsulation, _dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Encapsulation, dst: &mut BytesMut) -> Result<(), Self::Error> {
         log::info!(
             "Encoding encapsulation command: {:?}, length: {}",
-            _item.header.command,
-            _item.header.length
+            item.header.command,
+            item.header.length
         );
 
-        let item_len = _item.encoded_len();
-        if _dst.len() < item_len {
+        let item_len = item.encoded_len();
+        if dst.len() < item_len {
             log::warn!(
-                "Not enough bytes to encode encapsulation: {} < {}",
-                _dst.len(),
+                "Not enough bytes to encode encapsulation reserving space in buffer atual: {}, required: {}",
+                dst.len(),
                 item_len
             );
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Not enough bytes to encode encapsulation",
-            ));
+            dst.reserve(item_len);
         }
 
-        _item.encode(_dst).map_err(|err| {
+        item.encode(dst).map_err(|err| {
             log::warn!("Failed to encode encapsulation: {}", err);
             std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())
         })?;

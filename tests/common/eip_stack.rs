@@ -1,10 +1,11 @@
+use std::{io::Error, net::Ipv4Addr, sync::Arc};
+use tokio::{task::JoinHandle, time};
+
 use crate::common::{tcp, udp};
 use rs_eip_adapter::{
     cip::cip_identity::IdentityInfo,
     eip_stack::{EipStack, EipStackBuilder},
 };
-use std::{io::Error, net::Ipv4Addr, sync::Arc};
-use tokio::{task::JoinHandle, time};
 
 pub const DEFAULT_IDENTITY_INFO: IdentityInfo = IdentityInfo {
     vendor_id: 0x0000,
@@ -13,11 +14,9 @@ pub const DEFAULT_IDENTITY_INFO: IdentityInfo = IdentityInfo {
     revision_major: 0x00,
     revision_minor: 0x00,
     serial_number: 0x00000000,
-    product_name: "Rust EIP Adapter test",
+    product_name: "String with 25 characters",
 };
 pub const LOCAL_ADDRESS: Ipv4Addr = Ipv4Addr::LOCALHOST;
-pub const INVALID_COMMAND_ERROR_CODE: u32 = 0x0001;
-pub const INVALID_LENGTH_ERROR_CODE: u32 = 0x0065;
 pub const TEST_TIMEOUT_MS: u16 = 2000;
 const SERVER_STARTUP_TIMEOUT_MS: u16 = 100;
 
@@ -25,6 +24,7 @@ pub struct TestContext {
     eip_stack: Arc<EipStack>,
     server_handle: JoinHandle<Result<(), Error>>,
     pub udp_broadcast_port: u16,
+    pub tcp_port: u16,
 }
 
 impl TestContext {
@@ -63,5 +63,6 @@ pub async fn run_stack(identity_info: IdentityInfo) -> Result<TestContext, Error
         eip_stack,
         server_handle,
         udp_broadcast_port,
+        tcp_port,
     })
 }

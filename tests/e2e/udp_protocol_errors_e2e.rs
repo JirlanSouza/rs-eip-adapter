@@ -1,17 +1,19 @@
-use crate::common::{eip_stack, udp};
 use bytes::{BufMut, BytesMut};
-use rs_eip_adapter::encap::{
-    command::EncapsulationCommand,
-    header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
-};
 
-mod common;
+use crate::common::{eip_stack, udp};
+use rs_eip_adapter::{
+    common::binary::{FromBytes, ToBytes},
+    encap::{
+        command::EncapsulationCommand,
+        header::{EncapsulationHeader, EncapsulationStatus},
+    },
+};
 
 const DEFAULT_REQUEST_HEADER: EncapsulationHeader = EncapsulationHeader {
     command: EncapsulationCommand::Nop,
     length: 0x00,
     session_handle: 0x00,
-    status: 0,
+    status: EncapsulationStatus::Success,
     context: [0u8; 8],
     options: 0,
 };
@@ -23,35 +25,34 @@ async fn invalid_command_over_udp_returns_error() {
         .expect("Failed to run EIP stack");
 
     let request_header = EncapsulationHeader {
-        command: EncapsulationCommand::RegisterSession,
+        command: EncapsulationCommand::SendRRData,
         ..DEFAULT_REQUEST_HEADER
     };
 
-    let mut request_buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE);
+    let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN);
     request_header
         .encode(&mut request_buf)
         .expect("Failed to encode request header");
 
-    let response = udp::send_and_receive(
+    let reply = udp::send_and_receive(
         &format!("127.0.0.1:{}", context.udp_broadcast_port),
         request_buf.freeze(),
         eip_stack::TEST_TIMEOUT_MS,
     )
     .await;
+    context.stop().await;
 
-    assert!(response.is_some());
-    let mut response_buf = response.unwrap();
+    assert!(reply.is_some());
+    let mut reply_buf = reply.unwrap();
     let response_header =
-        EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
+        EncapsulationHeader::decode(&mut reply_buf).expect("Failed to decode reply header");
 
     assert_eq!(response_header.command, request_header.command);
     assert_eq!(
         response_header.status,
-        eip_stack::INVALID_COMMAND_ERROR_CODE
+        EncapsulationStatus::InvalidOrUnsupportedCommand
     );
     assert_eq!(response_header.length, 0);
-
-    context.stop().await;
 }
 
 #[tokio::test]
@@ -65,27 +66,27 @@ async fn unimplemented_command_over_udp_returns_error() {
         ..DEFAULT_REQUEST_HEADER
     };
 
-    let mut request_buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE);
+    let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN);
     request_header
         .encode(&mut request_buf)
         .expect("Failed to encode request header");
 
-    let response = udp::send_and_receive(
+    let reply = udp::send_and_receive(
         &format!("127.0.0.1:{}", context.udp_broadcast_port),
         request_buf.freeze(),
         eip_stack::TEST_TIMEOUT_MS,
     )
     .await;
 
-    assert!(response.is_some());
-    let mut response_buf = response.unwrap();
+    assert!(reply.is_some());
+    let mut reply_buf = reply.unwrap();
     let response_header =
-        EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
+        EncapsulationHeader::decode(&mut reply_buf).expect("Failed to decode reply header");
 
     assert_eq!(response_header.command, request_header.command);
     assert_eq!(
         response_header.status,
-        eip_stack::INVALID_COMMAND_ERROR_CODE
+        EncapsulationStatus::InvalidOrUnsupportedCommand
     );
 
     context.stop().await;
@@ -103,25 +104,25 @@ async fn mismatch_payload_length_returns_error() {
         ..DEFAULT_REQUEST_HEADER
     };
 
-    let mut request_buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE + 5);
+    let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 5);
     request_header
         .encode(&mut request_buf)
         .expect("Failed to encode request header");
     request_buf.put_slice(&[0u8; 5]);
 
-    let response = udp::send_and_receive(
+    let reply = udp::send_and_receive(
         &format!("127.0.0.1:{}", context.udp_broadcast_port),
         request_buf.freeze(),
         eip_stack::TEST_TIMEOUT_MS,
     )
     .await;
 
-    assert!(response.is_some());
-    let mut response_buf = response.unwrap();
+    assert!(reply.is_some());
+    let mut reply_buf = reply.unwrap();
     let response_header =
-        EncapsulationHeader::decode(&mut response_buf).expect("Failed to decode response header");
+        EncapsulationHeader::decode(&mut reply_buf).expect("Failed to decode reply header");
 
-    assert_eq!(response_header.status, eip_stack::INVALID_LENGTH_ERROR_CODE);
+    assert_eq!(response_header.status, EncapsulationStatus::InvalidLength);
 
     context.stop().await;
 }
