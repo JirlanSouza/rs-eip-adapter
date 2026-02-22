@@ -3,6 +3,7 @@ use std::fmt::Display;
 pub mod cip_class;
 pub mod cip_error;
 pub mod cip_identity;
+pub mod data_types;
 pub mod registry;
 pub mod tcp_ip_interface;
 

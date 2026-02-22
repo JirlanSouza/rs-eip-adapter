@@ -26,7 +26,11 @@ impl Registry {
         class_id: CipClassId,
         instance_id: u16,
     ) -> Result<Arc<T>, String> {
-        log::debug!("Getting instance of class {} with id {}", class_id, instance_id);
+        log::debug!(
+            "Getting instance of class {} with id {}",
+            class_id,
+            instance_id
+        );
         let class = self
             .get(class_id.to_u16())
             .ok_or(format!("Class {} not found", class_id))?;
@@ -65,11 +69,11 @@ mod tests {
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());
-        
+
         let retrieved_class = registry
             .get(identity_class_id)
             .expect("class should be present");
-        
+
         assert_eq!(retrieved_class.class_id(), identity_class_id);
         assert_eq!(retrieved_class.class_name(), "Identity");
     }
@@ -88,23 +92,26 @@ mod tests {
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());
-        
+
         let identity_instance = registry
             .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)
             .expect("expected identity instance");
-        
+
         assert_eq!(identity_instance.vendor_id, identity_info.vendor_id);
-        assert_eq!(identity_instance.product_name, identity_info.product_name);
+        assert_eq!(
+            identity_instance.product_name.value(),
+            identity_info.product_name
+        );
     }
 
     #[test]
     fn get_instance_missing_class_returns_error() {
         let registry = Registry::new();
-        
+
         let error_message = registry
             .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)
             .unwrap_err();
-        
+
         assert!(error_message.contains("not found"));
     }
 
@@ -122,11 +129,11 @@ mod tests {
         };
         let identity_class = IdentityClass::new(&identity_info);
         registry.register(identity_class.clone());
-        
+
         let error_message = registry
             .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 2)
             .unwrap_err();
-        
+
         assert!(error_message.contains("Instance"));
     }
 
@@ -140,11 +147,11 @@ mod tests {
         ));
         tcp_class.add_instance(tcp_instance).unwrap();
         registry.register(tcp_class.clone());
-        
+
         let error_message = registry
             .get_instance::<IdentityInstance>(CipClassId::TcpIpInterfaceClassId, 1)
             .unwrap_err();
-        
+
         assert!(error_message.contains("downcast"));
     }
 }

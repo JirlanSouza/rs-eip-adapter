@@ -17,7 +17,7 @@ pub struct IdentityInfo {
 use crate::cip::{
     CipClassId,
     cip_class::{CipClass, CipInstance},
-    cip_error::CipError,
+    cip_error::CipError, data_types::short_string::ShortString,
 };
 
 pub struct IdentityClass {
@@ -38,7 +38,7 @@ impl IdentityClass {
                 info.revision_minor,
                 0,
                 info.serial_number,
-                info.product_name,
+                info.product_name.into(),
                 0,
             );
 
@@ -92,7 +92,7 @@ pub struct IdentityInstance {
     pub revision_minor: u8,
     pub status: u16,
     pub serial_number: u32,
-    pub product_name: String,
+    pub product_name: ShortString,
     pub state: u8,
 }
 
@@ -106,7 +106,7 @@ impl IdentityInstance {
         revision_minor: u8,
         status: u16,
         serial_number: u32,
-        product_name: impl Into<String>,
+        product_name: ShortString,
         state: u8,
     ) -> Self {
         Self {
@@ -118,7 +118,7 @@ impl IdentityInstance {
             revision_minor,
             status,
             serial_number,
-            product_name: product_name.into(),
+            product_name,
             state,
         }
     }
