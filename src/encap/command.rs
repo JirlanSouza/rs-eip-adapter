@@ -1,3 +1,6 @@
+pub mod list_identity;
+pub mod register_session;
+
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EncapsulationCommand {
@@ -12,8 +15,8 @@ pub enum EncapsulationCommand {
     Unknown(u16),
 }
 
-impl EncapsulationCommand {
-    pub fn from_u16(v: u16) -> Self {
+impl From<u16> for EncapsulationCommand {
+    fn from(v: u16) -> Self {
         match v {
             0x0000 => EncapsulationCommand::Nop,
             0x0004 => EncapsulationCommand::ListServices,
@@ -26,9 +29,11 @@ impl EncapsulationCommand {
             other => EncapsulationCommand::Unknown(other),
         }
     }
+}
 
-    pub fn to_u16(&self) -> u16 {
-        match self {
+impl From<EncapsulationCommand> for u16 {
+    fn from(cmd: EncapsulationCommand) -> u16 {
+        match cmd {
             EncapsulationCommand::Nop => 0x0000,
             EncapsulationCommand::ListServices => 0x0004,
             EncapsulationCommand::ListIdentity => 0x0063,
@@ -37,7 +42,7 @@ impl EncapsulationCommand {
             EncapsulationCommand::UnregisterSession => 0x0066,
             EncapsulationCommand::SendRRData => 0x006F,
             EncapsulationCommand::SendUnitData => 0x0070,
-            EncapsulationCommand::Unknown(cmd) => *cmd,
+            EncapsulationCommand::Unknown(v) => v,
         }
     }
 }
