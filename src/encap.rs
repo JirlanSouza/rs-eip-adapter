@@ -1,176 +1,95 @@
-use crate::encap::error::FrameError;
-use bytes::Bytes;
-use header::EncapsulationHeader;
+use bytes::{BufMut, Bytes};
 
-pub mod broadcast_handler;
+use crate::{
+    common::binary::{BinaryError, ToBytes},
+    encap::{
+        error::EncapsulationError,
+        header::EncapsulationHeader,
+        payload::{EncapsulationPayload, EncapsulationPayloadFromBytes},
+    },
+};
+
 pub mod command;
-mod cpf;
+pub mod cpf;
 pub mod error;
 pub mod handler;
 pub mod header;
-mod list_identity;
+pub mod payload;
 pub mod session_manager;
-pub mod session_handler;
 
-pub const ENCAPSULATION_PROTOCOL_VERSION: u16 = 1;
+#[derive(Debug)]
+pub struct RawEncapsulation {
+    pub header: EncapsulationHeader,
+    pub payload: Bytes,
+}
+
+impl RawEncapsulation {
+    pub fn new(header: EncapsulationHeader, payload: Bytes) -> Self {
+        Self { header, payload }
+    }
+}
+
+impl TryFrom<&mut RawEncapsulation> for Encapsulation {
+    type Error = (EncapsulationError, EncapsulationHeader);
+
+    fn try_from(raw: &mut RawEncapsulation) -> Result<Self, Self::Error> {
+        let payload = EncapsulationPayload::decode(raw.header.command, &mut raw.payload)
+            .inspect_err(|err| log::warn!("Error decoding payload: {}", err))
+            .map_err(|err| (err.into(), raw.header))?;
+
+        Encapsulation::new(raw.header, payload).map_err(|err| (err, raw.header))
+    }
+}
 
 #[derive(Debug)]
 pub struct Encapsulation {
-    header: EncapsulationHeader,
-    payload: Bytes,
+    pub header: EncapsulationHeader,
+    pub payload: EncapsulationPayload,
 }
 
 impl Encapsulation {
-    pub fn new(header: EncapsulationHeader, payload: Bytes) -> Result<Self, FrameError> {
+    pub const VERSION: u16 = 1;
+
+    pub fn new(
+        header: EncapsulationHeader,
+        payload: EncapsulationPayload,
+    ) -> Result<Self, EncapsulationError> {
         let encapsulation = Self { header, payload };
         encapsulation.validate()?;
         Ok(encapsulation)
     }
 
-    pub fn decode(mut in_buff: Bytes) -> Result<Self, FrameError> {
-        let header = EncapsulationHeader::decode(&mut in_buff)?;
-        let payload = in_buff;
-        let encapsulation = Self { header, payload };
-        encapsulation.validate()?;
-        Ok(encapsulation)
-    }
+    fn validate(&self) -> Result<(), EncapsulationError> {
+        let payload_len = self.payload.encoded_len();
+        let header_len = self.header.length as usize;
 
-    fn validate(&self) -> Result<(), FrameError> {
-        if self.payload.len() != self.header.length as usize {
-            return Err(FrameError::InvalidLength(
-                self.header.clone(),
-                self.payload.len(),
-            ));
+        if payload_len != header_len {
+            return Err(EncapsulationError::InvalidLength {
+                expected: header_len,
+                actual: payload_len,
+            });
         }
-
         Ok(())
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::encap::header::ENCAPSULATION_HEADER_SIZE;
+impl ToBytes for Encapsulation {
+    fn encode<T: BufMut>(&self, buffer: &mut T) -> Result<(), BinaryError> {
+        let total_len = self.encoded_len();
 
-    use super::*;
-    use bytes::{BufMut, Bytes, BytesMut};
-    use command::EncapsulationCommand;
+        if buffer.remaining_mut() < total_len {
+            return Err(BinaryError::BufferTooSmall {
+                expected: total_len,
+                actual: buffer.remaining_mut(),
+            });
+        }
 
-    #[test]
-    fn new_returns_encapsulation_for_valid_header_and_payload() {
-        let test_header = EncapsulationHeader {
-            command: EncapsulationCommand::ListIdentity,
-            length: 3,
-            session_handle: 0x1122_3344,
-            status: 0,
-            context: [0u8; 8],
-            options: 0,
-        };
-
-        let mut buffer = BytesMut::with_capacity(3);
-        buffer.put_slice(&[0x01u8, 0x02, 0x03]);
-        let frozen = buffer.freeze();
-
-        let parsed = Encapsulation::new(test_header.clone(), frozen)
-            .expect("Encapsulation::decode should return Some");
-        assert_eq!(parsed.header, test_header);
-        assert_eq!(parsed.payload, Bytes::from(&[0x01u8, 0x02, 0x03][..]));
+        self.header.encode(buffer)?;
+        self.payload.encode(buffer)?;
+        Ok(())
     }
 
-    #[test]
-    fn new_returns_err_when_lengths_do_not_match() {
-        let test_header = EncapsulationHeader {
-            command: EncapsulationCommand::ListIdentity,
-            length: 2,
-            session_handle: 0,
-            status: 0,
-            context: [0u8; 8],
-            options: 0,
-        };
-
-        let mut buffer = BytesMut::with_capacity(6);
-        buffer.put_slice(&[0x01u8, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        let frozen = buffer.freeze();
-
-        let parsed = Encapsulation::new(test_header.clone(), frozen);
-        assert!(parsed.is_err());
-        assert_eq!(
-            parsed.unwrap_err(),
-            FrameError::InvalidLength(test_header.clone(), 6)
-        );
-    }
-
-    #[test]
-    fn decode_returns_encapsulation_for_valid_header_and_payload() {
-        let test_header = EncapsulationHeader {
-            command: EncapsulationCommand::ListIdentity,
-            length: 3,
-            session_handle: 0x1122_3344,
-            status: 0,
-            context: [0u8; 8],
-            options: 0,
-        };
-
-        let mut buffer = BytesMut::with_capacity(header::ENCAPSULATION_HEADER_SIZE + 3);
-        test_header
-            .encode(&mut buffer)
-            .expect("header encode should succeed");
-        buffer.put_slice(&[0x01u8, 0x02, 0x03]);
-        let frozen = buffer.freeze();
-
-        let parsed =
-            Encapsulation::decode(frozen).expect("Encapsulation::decode should return Some");
-        assert_eq!(parsed.header, test_header);
-        assert_eq!(parsed.payload, Bytes::from(&[0x01u8, 0x02, 0x03][..]));
-    }
-
-    #[test]
-    fn decode_returns_err_when_lengths_do_not_match() {
-        let test_header = EncapsulationHeader {
-            command: EncapsulationCommand::ListIdentity,
-            length: 2,
-            session_handle: 0,
-            status: 0,
-            context: [0u8; 8],
-            options: 0,
-        };
-
-        let mut buffer = BytesMut::with_capacity(header::ENCAPSULATION_HEADER_SIZE + 6);
-        test_header
-            .encode(&mut buffer)
-            .expect("header encode should succeed");
-        buffer.put_slice(&[0x01u8, 0x02, 0x03, 0x04, 0x05, 0x06]);
-        let frozen = buffer.freeze();
-
-        let parsed = Encapsulation::decode(frozen);
-        assert!(parsed.is_err());
-        assert_eq!(
-            parsed.unwrap_err(),
-            FrameError::InvalidLength(test_header.clone(), 6)
-        );
-    }
-
-    #[test]
-    fn decode_returns_err_when_buffer_is_too_small() {
-        let test_header = EncapsulationHeader {
-            command: EncapsulationCommand::ListIdentity,
-            length: 2,
-            session_handle: 0,
-            status: 0,
-            context: [0u8; 8],
-            options: 0,
-        };
-
-        let mut buffer = BytesMut::with_capacity(header::ENCAPSULATION_HEADER_SIZE);
-        test_header
-            .encode(&mut buffer)
-            .expect("header encode should succeed");
-        let frozen = buffer.split_to(ENCAPSULATION_HEADER_SIZE - 3).freeze();
-
-        let parsed = Encapsulation::decode(frozen);
-        assert!(parsed.is_err());
-        assert_eq!(
-            parsed.unwrap_err(),
-            FrameError::Inconplete(ENCAPSULATION_HEADER_SIZE - 3)
-        );
+    fn encoded_len(&self) -> usize {
+        EncapsulationHeader::LEN + self.payload.encoded_len()
     }
 }

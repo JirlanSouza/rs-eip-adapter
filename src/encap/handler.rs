@@ -1,95 +1,203 @@
-use crate::encap::{
-    Encapsulation,
-    error::{EncapsulationError, HandlerError},
-    header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader},
-};
-use bytes::{BufMut, Bytes, BytesMut};
+use std::sync::Arc;
 
-pub trait EncapsulationHandler {
-    fn handle_request(&self, encapsulation: &mut Encapsulation) -> Option<Bytes> {
-        let mut out_buf = self.alloc_response_buffer();
-        let result = self.dispatch(encapsulation, &mut out_buf);
-        self.handle_result(&mut encapsulation.header, result, out_buf)
+use crate::cip::registry::Registry;
+use crate::common::binary::ToBytes;
+use crate::encap::{
+    Encapsulation, RawEncapsulation,
+    command::{
+        EncapsulationCommand, list_identity::ListIdentityHandler,
+        register_session::RegisterSessionHandler,
+    },
+    error::{EncapsulationError, HandlerError, InternalError},
+    header::EncapsulationHeader,
+    payload::EncapsulationPayload,
+    session_manager::SessionManager,
+};
+
+#[derive(Debug, PartialEq)]
+pub enum TransportType {
+    TCP,
+    UDP(CastMode),
+}
+
+impl TransportType {
+    fn is_valid_command(&self, command: EncapsulationCommand) -> bool {
+        match self {
+            TransportType::TCP => {
+                matches!(
+                    command,
+                    EncapsulationCommand::Nop
+                        | EncapsulationCommand::RegisterSession
+                        | EncapsulationCommand::UnregisterSession
+                        | EncapsulationCommand::SendRRData
+                        | EncapsulationCommand::SendUnitData
+                )
+            }
+            TransportType::UDP(_) => {
+                matches!(
+                    command,
+                    EncapsulationCommand::ListIdentity
+                        | EncapsulationCommand::ListInterfaces
+                        | EncapsulationCommand::ListServices
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CastMode {
+    Unicast,
+    Multicast,
+    Broadcast,
+}
+
+pub struct ConnectionContext {
+    pub session_handle: Option<u32>,
+    pub transport_type: TransportType,
+}
+
+impl ConnectionContext {
+    pub fn new(transport_type: TransportType) -> Self {
+        Self {
+            session_handle: None,
+            transport_type,
+        }
+    }
+}
+
+pub struct EncapsulationHandler {
+    _registry: Arc<Registry>,
+    _session_manager: Arc<SessionManager>,
+    list_identity_handler: ListIdentityHandler,
+    register_session_handler: RegisterSessionHandler,
+}
+
+impl EncapsulationHandler {
+    pub fn new(registry: Arc<Registry>, session_manager: Arc<SessionManager>) -> Self {
+        Self {
+            _registry: registry.clone(),
+            _session_manager: session_manager.clone(),
+            list_identity_handler: ListIdentityHandler::new(registry),
+            register_session_handler: RegisterSessionHandler::new(session_manager),
+        }
+    }
+
+    pub fn handle(
+        &self,
+        req: &mut RawEncapsulation,
+        context: &mut ConnectionContext,
+    ) -> Result<Encapsulation, InternalError> {
+        log::info!(
+            "Received new request from transport: {:?}, command: {:?}",
+            context.transport_type,
+            req.header.command
+        );
+        log::debug!(
+            "Received new request from transport: {:?}, header: {:?}, payload: {:?}",
+            context.transport_type,
+            req.header,
+            req.payload
+        );
+
+        if !context.transport_type.is_valid_command(req.header.command) {
+            return self.handle_error_reply(
+                &req.header,
+                EncapsulationError::InvalidOrUnsupportedCommand(req.header.command.into()),
+            );
+        }
+
+        let req_encapsulation = match Encapsulation::try_from(req) {
+            Ok(encapsulation) => encapsulation,
+            Err((error, header)) => return self.handle_error_reply(&header, error),
+        };
+
+        log::debug!(
+            "Decoded raw encapsulation payload header: {:?}, payload: {:?}",
+            req_encapsulation.header,
+            req_encapsulation.payload
+        );
+
+        match self.dispatch(&req_encapsulation, context) {
+            Ok(encapsulation) => Ok(encapsulation),
+            Err(error) => match error {
+                HandlerError::Protocol(p_error) => {
+                    return self.handle_error_reply(&req_encapsulation.header, p_error);
+                }
+                _ => Err(InternalError::from(error.to_string())),
+            },
+        }
     }
 
     fn handle_error_reply(
         &self,
-        header: &mut EncapsulationHeader,
-        err: EncapsulationError,
-    ) -> Option<Bytes> {
-        let out_buf = self.alloc_response_buffer();
-        self.handle_result(header, Err(HandlerError::from(err)), out_buf)
-    }
+        header: &EncapsulationHeader,
+        error: EncapsulationError,
+    ) -> Result<Encapsulation, InternalError> {
+        log::warn!(
+            "Handling error reply for command: {:?}, error: {:?}",
+            header.command,
+            error
+        );
 
-    fn alloc_response_buffer(&self) -> BytesMut {
-        let mut buf = BytesMut::with_capacity(ENCAPSULATION_HEADER_SIZE);
-        buf.put_bytes(0, ENCAPSULATION_HEADER_SIZE);
-        buf
-    }
-
-    fn handle_result(
-        &self,
-        header: &mut EncapsulationHeader,
-        result: Result<(), HandlerError>,
-        mut out_buf: BytesMut,
-    ) -> Option<Bytes> {
-        log::info!("Handling result for command {:?}", header.command);
-        if let Err(err) = result {
-            if let HandlerError::Internal(e) = &err {
-                log::warn!("Error on encapsulation: {}", e);
-                return None;
+        let reply_payload = match error {
+            EncapsulationError::UnsupportedProtocol(data) => {
+                EncapsulationPayload::RegisterSession(data)
             }
-            self.update_header_on_error(header, err, &mut out_buf);
-        } else {
-            header.status = EncapsulationError::Success.to_u32();
-            header.length = (out_buf.len() - ENCAPSULATION_HEADER_SIZE) as u16;
-        }
+            _ => EncapsulationPayload::None,
+        };
 
-        self.finalize_response(header, out_buf)
+        let reply_header =
+            header.clone_with_error_and_length(error, reply_payload.encoded_len() as u16);
+
+        log::debug!(
+            "Sending error reply header: {:?}, payload: {:?}",
+            reply_header,
+            reply_payload
+        );
+
+        Ok(Encapsulation {
+            header: reply_header,
+            payload: reply_payload,
+        })
     }
+}
 
-    fn update_header_on_error(
-        &self,
-        header: &mut EncapsulationHeader,
-        err: HandlerError,
-        out_buf: &mut BytesMut,
-    ) {
-        log::warn!("Failed to dispatch command: {}", err);
-        if let HandlerError::Protocol(e) = err {
-            log::warn!("Error on encapsulation layer: {}", e);
-            header.status = e.to_u32();
-        }
-
-        header.length = 0;
-        out_buf.truncate(ENCAPSULATION_HEADER_SIZE);
-    }
-
-    fn finalize_response(
-        &self,
-        header: &mut EncapsulationHeader,
-        mut out_buf: BytesMut,
-    ) -> Option<Bytes> {
-        if out_buf.len() < ENCAPSULATION_HEADER_SIZE {
-            log::warn!("Output buffer too small");
-            out_buf.put_bytes(0, ENCAPSULATION_HEADER_SIZE - out_buf.len());
-        }
-
-        let mut header_view = &mut out_buf[0..ENCAPSULATION_HEADER_SIZE];
-        match header.encode(&mut header_view) {
-            Ok(()) => {
-                log::trace!("Success encode encapsulation header: {:?}", header);
-                Some(out_buf.freeze())
-            }
-            Err(err) => {
-                log::error!("Failed to encode encapsulation header: {}", err);
-                None
-            }
-        }
-    }
-
+impl EncapsulationHandler {
     fn dispatch(
         &self,
-        encapsulation: &mut Encapsulation,
-        out_buf: &mut BytesMut,
-    ) -> Result<(), HandlerError>;
+        req: &Encapsulation,
+        context: &mut ConnectionContext,
+    ) -> Result<Encapsulation, HandlerError> {
+        log::info!("Dispatching command {:?}", req.header.command);
+        match req.header.command {
+            EncapsulationCommand::Nop => Ok(Encapsulation {
+                header: req.header.clone(),
+                payload: EncapsulationPayload::None,
+            }),
+            EncapsulationCommand::ListIdentity => {
+                if let EncapsulationPayload::None = req.payload {
+                    return self.list_identity_handler.handle(&req.header);
+                }
+
+                Err(HandlerError::from(EncapsulationError::InvalidLength {
+                    expected: 0,
+                    actual: req.payload.encoded_len(),
+                }))
+            }
+            EncapsulationCommand::RegisterSession => {
+                if let EncapsulationPayload::RegisterSession(data) = req.payload {
+                    self.register_session_handler
+                        .handle(&req.header, &data, context)
+                } else {
+                    Err(HandlerError::from(InternalError::Other(
+                        "Invalid payload to register session".to_string(),
+                    )))
+                }
+            }
+            _ => Err(HandlerError::from(
+                EncapsulationError::InvalidOrUnsupportedCommand(req.header.command),
+            )),
+        }
+    }
 }

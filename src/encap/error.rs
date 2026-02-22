@@ -1,59 +1,119 @@
 use std::{fmt::Display, io};
 
-use crate::encap::header::{ENCAPSULATION_HEADER_SIZE, EncapsulationHeader};
+use crate::{
+    common::binary::BinaryError,
+    encap::{
+        command::{EncapsulationCommand, register_session::RegisterSessionData},
+        header::EncapsulationStatus,
+    },
+};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EncapsulationError {
-    Success = 0x0000,
-    InvalidOrUnsupportedCommand = 0x0001,
-    InsufficientMemory = 0x0002,
-    IncorrectData = 0x0003,
-    InvalidSessionHandle = 0x0064,
-    InvalidLength = 0x0065,
-    UnsupportedProtocol = 0x0069,
+    InvalidOrUnsupportedCommand(EncapsulationCommand),
+    InsufficientMemory,
+    IncorrectData,
+    InvalidSessionHandle(u32),
+    InvalidLength { expected: usize, actual: usize },
+    UnsupportedProtocol(RegisterSessionData),
 }
 
-impl EncapsulationError {
-    pub fn to_u32(self) -> u32 {
-        self as u32
+impl From<EncapsulationError> for EncapsulationStatus {
+    fn from(value: EncapsulationError) -> Self {
+        match value {
+            EncapsulationError::InvalidOrUnsupportedCommand(_) => Self::InvalidOrUnsupportedCommand,
+            EncapsulationError::InsufficientMemory => Self::InsufficientMemory,
+            EncapsulationError::IncorrectData => Self::IncorrectData,
+            EncapsulationError::InvalidSessionHandle(_) => Self::InvalidSessionHandle,
+            EncapsulationError::InvalidLength { .. } => Self::InvalidLength,
+            EncapsulationError::UnsupportedProtocol(_) => Self::UnsupportedProtocol,
+        }
+    }
+}
+
+impl From<BinaryError> for EncapsulationError {
+    fn from(err: BinaryError) -> Self {
+        match err {
+            BinaryError::BufferTooSmall { expected, actual } => {
+                Self::InvalidLength { expected, actual }
+            }
+            BinaryError::InvalidData {
+                message: _,
+                expected: _,
+                actual: _,
+            } => Self::IncorrectData,
+            BinaryError::Truncated { expected, actual } => Self::InvalidLength { expected, actual },
+        }
     }
 }
 
 impl Display for EncapsulationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EncapsulationError::Success => write!(f, "Success"),
-            EncapsulationError::InvalidOrUnsupportedCommand => {
+            EncapsulationError::InvalidOrUnsupportedCommand(_) => {
                 write!(f, "Invalid or unsupported command")
             }
             EncapsulationError::InsufficientMemory => write!(f, "Insufficient memory"),
             EncapsulationError::IncorrectData => write!(f, "Incorrect data"),
-            EncapsulationError::InvalidSessionHandle => write!(f, "Invalid session handle"),
-            EncapsulationError::InvalidLength => write!(f, "Invalid length"),
-            EncapsulationError::UnsupportedProtocol => write!(f, "Unsupported protocol"),
+            EncapsulationError::InvalidSessionHandle(_) => write!(f, "Invalid session handle"),
+            EncapsulationError::InvalidLength { expected, actual } => {
+                write!(
+                    f,
+                    "Invalid length: expected {}, actual: {}",
+                    expected, actual
+                )
+            }
+            EncapsulationError::UnsupportedProtocol(_) => write!(f, "Unsupported protocol"),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum FrameError {
-    Inconplete(usize),
-    InvalidLength(EncapsulationHeader, usize),
+pub enum DecodeError {
+    Truncated { expected: usize, actual: usize },
+    LengthMismatch { expected: usize, actual: usize },
+    Other(String),
 }
 
-impl Display for FrameError {
+impl Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FrameError::Inconplete(length) => write!(
+            DecodeError::Truncated { expected, actual } => write!(
                 f,
-                "Incomplete frame, min expected: {}, got: {}",
-                ENCAPSULATION_HEADER_SIZE, length
+                "Incomplete frame minimum size: expected {}, actual: {}",
+                expected, actual
             ),
-            FrameError::InvalidLength(header, payload_length) => write!(
+            DecodeError::LengthMismatch { expected, actual } => write!(
                 f,
-                "Invalid length header length field: {}, payload length: {}",
-                header.length, payload_length
+                "Invalid payload length: expected {}, actual: {}",
+                expected, actual
             ),
+            DecodeError::Other(msg) => write!(f, "Other error: {}", msg),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum EncodeError {
+    BufferTooSmall { expected: usize, actual: usize },
+    Other(String),
+}
+
+impl From<String> for EncodeError {
+    fn from(err: String) -> Self {
+        EncodeError::Other(err)
+    }
+}
+
+impl Display for EncodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EncodeError::BufferTooSmall { expected, actual } => write!(
+                f,
+                "Buffer too small: expected {}, actual: {}",
+                expected, actual
+            ),
+            EncodeError::Other(msg) => write!(f, "Other error: {}", msg),
         }
     }
 }
@@ -100,6 +160,12 @@ impl From<EncapsulationError> for HandlerError {
 impl From<InternalError> for HandlerError {
     fn from(err: InternalError) -> Self {
         HandlerError::Internal(err)
+    }
+}
+
+impl From<String> for HandlerError {
+    fn from(err: String) -> Self {
+        HandlerError::Internal(InternalError::Other(err))
     }
 }
 

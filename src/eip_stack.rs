@@ -1,3 +1,6 @@
+use std::{io, net::Ipv4Addr, sync::Arc};
+use tokio::sync::{Mutex, broadcast::Sender};
+
 use crate::{
     cip::{
         cip_class::CipClass,
@@ -5,44 +8,43 @@ use crate::{
         registry::Registry,
         tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
     },
-    encap::{broadcast_handler::BroadcastHandler, session_handler::SessionHandler, session_manager::SessionManager},
+    encap::{handler::EncapsulationHandler, session_manager::SessionManager},
     transport::{tcp::TcpTransport, udp::UdpTransport},
 };
-use std::{io, net::Ipv4Addr, sync::Arc};
-use tokio::sync::{Mutex, broadcast::Sender};
 
 pub struct EipStack {
     registry: Arc<Registry>,
-    session_manager: Arc<Mutex<SessionManager>>,
     udp_transport: Arc<Mutex<UdpTransport>>,
     tcp_transport: Arc<Mutex<TcpTransport>>,
-    shutdown_tx: Sender<()>,
+    shutdown_tx: Arc<Sender<()>>,
 }
 
 impl EipStack {
     pub async fn start(&self) -> io::Result<()> {
         log::info!("Starting EIP stack");
-        let shutdown_rc = self.shutdown_tx.subscribe();
-        let udp_transport = self.udp_transport.clone();
 
+        let udp_transport = self.udp_transport.clone();
         let udp_handle = tokio::spawn(async move {
-            _ = udp_transport
-                .lock()
-                .await
-                .listen_broadcast(shutdown_rc)
-                .await;
+            _ = udp_transport.lock().await.listen().await;
         });
 
         let tcp_transport = self.tcp_transport.clone();
         let tcp_handle = tokio::spawn(async move {
-            _ = tcp_transport.lock().await.listen_tcp().await;
+            _ = tcp_transport.lock().await.listen().await;
         });
-        tokio::try_join!(udp_handle, tcp_handle)?;
+
+        let shutdown_tx = self.shutdown_tx.clone();
+        let shutdown_handle = tokio::spawn(async move {
+            _ = EipStack::handle_graceful_shutdown(shutdown_tx).await;
+        });
+
+        tokio::try_join!(udp_handle, tcp_handle, shutdown_handle)?;
         Ok(())
     }
 
     pub fn stop(&self) -> io::Result<()> {
         log::info!("Stopping EIP stack");
+
         self.shutdown_tx.send(()).map_err(|err| {
             log::error!("Error on send shutdown signal: {}", err);
             io::Error::new(io::ErrorKind::Other, "Error on send shutdown signal")
@@ -52,6 +54,27 @@ impl EipStack {
 
     pub fn get_registry(&self) -> Arc<Registry> {
         self.registry.clone()
+    }
+
+    async fn handle_graceful_shutdown(shutdown_tx: Arc<Sender<()>>) -> io::Result<()> {
+        let mut shutdown_rx = shutdown_tx.subscribe();
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                log::info!("Ctrl+C received, stopping EIP stack");
+            }
+            _ = shutdown_rx.recv() => {
+                log::info!("EIP stack shutting down");
+                return Ok(());
+            }
+        };
+
+        log::info!("Ctrl+C received, stopping EIP stack");
+
+        shutdown_tx.send(()).map_err(|err| {
+            log::error!("Error on send shutdown signal: {}", err);
+            io::Error::new(io::ErrorKind::Other, "Error on send shutdown signal")
+        })?;
+        Ok(())
     }
 }
 
@@ -117,23 +140,24 @@ impl EipStackBuilder {
         self.registry.register(tcp_ip_if_class);
 
         let registry = Arc::new(self.registry);
-        let shutdown_tx = Sender::new(1);
+        let shutdown_tx = Arc::new(Sender::new(1));
+        let handler = Arc::new(EncapsulationHandler::new(
+            registry.clone(),
+            Arc::new(SessionManager::new()),
+        ));
+
         let udp_transport = UdpTransport::new(
-            BroadcastHandler::new(registry.clone()),
+            handler.clone(),
             self.config.udp_broadcast_port,
+            shutdown_tx.clone(),
         )
         .await?;
 
-        let tcp_transport = TcpTransport::new(
-            SessionHandler::new(registry.clone(), Arc::new(SessionManager::new())),
-            self.config.tcp_port,
-            shutdown_tx.subscribe(),
-        )
-        .await?;
+        let tcp_transport =
+            TcpTransport::new(handler, self.config.tcp_port, shutdown_tx.clone()).await?;
 
         Ok(EipStack {
             registry,
-            session_manager: Arc::new(Mutex::new(SessionManager::new())),
             udp_transport: Arc::new(Mutex::new(udp_transport)),
             tcp_transport: Arc::new(Mutex::new(tcp_transport)),
             shutdown_tx,
