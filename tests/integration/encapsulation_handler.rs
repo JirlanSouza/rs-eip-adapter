@@ -79,7 +79,7 @@ fn handler_should_reply_status_error_for_unsupported_command() {
     let handler = build_handler();
 
     let request_header = EncapsulationHeader {
-        command: EncapsulationCommand::RegisterSession,
+        command: EncapsulationCommand::ListInterfaces,
         length: 0,
         session_handle: 0,
         status: EncapsulationStatus::Success,
@@ -88,7 +88,7 @@ fn handler_should_reply_status_error_for_unsupported_command() {
     };
 
     let mut encapsulation = RawEncapsulation::new(request_header, Bytes::new());
-    let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+    let mut context = ConnectionContext::new(TransportType::TCP);
 
     let reply = handler
         .handle(&mut encapsulation, &mut context)
