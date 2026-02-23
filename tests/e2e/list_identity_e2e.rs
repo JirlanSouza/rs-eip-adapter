@@ -28,7 +28,7 @@ const DEFAULT_REQUEST_HEADER: EncapsulationHeader = EncapsulationHeader {
 };
 
 #[tokio::test]
-async fn list_identity_success_e2e() {
+async fn list_identity_success_reply_is_correct() {
     let context = eip_stack::run_stack(eip_stack::DEFAULT_IDENTITY_INFO)
         .await
         .expect("Error on run Eip stack");
@@ -128,7 +128,7 @@ async fn list_identity_success_e2e() {
 }
 
 #[tokio::test]
-async fn list_identity_with_payload_error() {
+async fn list_identity_with_invalid_length_and_payload_reply_status_is_error() {
     let context = eip_stack::run_stack(eip_stack::DEFAULT_IDENTITY_INFO)
         .await
         .expect("Failed to run EIP stack");

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::cip::registry::Registry;
 use crate::common::binary::ToBytes;
+use crate::encap::header::EncapsulationStatus;
 use crate::encap::{
     Encapsulation, RawEncapsulation,
     command::{
@@ -101,10 +102,24 @@ impl EncapsulationHandler {
         );
 
         if !context.transport_type.is_valid_command(req.header.command) {
+            if context.transport_type == TransportType::UDP(CastMode::Broadcast) {
+                return Err(InternalError::Other(format!(
+                    "Invalid or unsupported command for UDP broadcast (command: {:?})",
+                    req.header.command
+                )));
+            }
+
             return self.handle_error_reply(
                 &req.header,
                 EncapsulationError::InvalidOrUnsupportedCommand(req.header.command.into()),
             );
+        }
+
+        if req.header.status != EncapsulationStatus::Success {
+            return Err(InternalError::Other(format!(
+                "Invalid status for request (command: {:?}, status: {:?})",
+                req.header.command, req.header.status
+            )));
         }
 
         let req_encapsulation = match Encapsulation::try_from(req) {
