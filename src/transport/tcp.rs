@@ -1,19 +1,18 @@
-use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
     sync::Arc,
 };
+
+use futures_util::{sink::SinkExt, stream::StreamExt};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::broadcast::Sender,
 };
 use tokio_util::codec::Framed;
 
-use crate::{
-    encap::handler::{ConnectionContext, EncapsulationHandler, TransportType},
-    transport::codec::EncapsulationCodec,
-};
+use super::codec::EncapsulationCodec;
+use crate::encap::{ConnectionContext, EncapsulationHandler, TransportType};
 
 pub struct TcpTransport {
     tcp_listener: TcpListener,
@@ -71,7 +70,7 @@ impl TcpTransport {
     }
 
     async fn handle_connection(&mut self, stream: TcpStream, src: SocketAddr) {
-        let mut context = ConnectionContext::new(TransportType::TCP);
+        let mut context = ConnectionContext::new(src, TransportType::TCP);
         let mut framed = Framed::new(stream, EncapsulationCodec::new());
         let mut connection_shutdown_rx = self.shutdown.subscribe();
 
@@ -102,10 +101,15 @@ impl TcpTransport {
         let frame_result = frame_result_opt.unwrap();
         if let Ok(mut frame) = frame_result {
             match self.handler.handle(&mut frame, context) {
-                Ok(reply) => {
+                Ok(Some(reply)) => {
+                    log::debug!("Sending reply: ({:?})", reply);
+
                     if let Err(err) = framed.send(reply).await {
                         log::error!("Failed to send reply: {}", err);
                     }
+                }
+                Ok(None) => {
+                    log::info!("No reply to send to: {}", context.peer_addr);
                 }
                 Err(err) => {
                     log::error!("Failed to handle request: {}", err);

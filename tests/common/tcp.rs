@@ -38,7 +38,13 @@ pub async fn send_and_receive(
     })
     .await
     {
-        Ok(_) => Some(Bytes::from(response)),
-        Err(e) => panic!("Error on receive response: {}", e),
+        Ok(_) => {
+            log::debug!("Received response: {:?}", response);
+            Some(Bytes::from(response))
+        }
+        Err(_) => {
+            log::warn!("Timeout on receive response");
+            None
+        }
     }
 }

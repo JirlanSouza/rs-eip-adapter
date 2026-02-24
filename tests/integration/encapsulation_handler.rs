@@ -1,5 +1,9 @@
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
+
 use bytes::{Bytes, BytesMut};
-use std::{net::Ipv4Addr, sync::Arc};
 
 use rs_eip_adapter::{
     cip::{
@@ -10,9 +14,8 @@ use rs_eip_adapter::{
     },
     common::binary::ToBytes,
     encap::{
-        RawEncapsulation,
+        CastMode, ConnectionContext, EncapsulationHandler, RawEncapsulation, TransportType,
         command::{EncapsulationCommand, register_session::RegisterSessionData},
-        handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType},
         header::{EncapsulationHeader, EncapsulationStatus},
         payload::EncapsulationPayload,
         session_manager::SessionManager,
@@ -63,11 +66,17 @@ fn handler_reply_status_success_for_list_identity() {
     };
 
     let mut encapsulation = RawEncapsulation::new(request_header, Bytes::new());
-    let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+    let mut context = ConnectionContext::new(
+        SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
+        TransportType::UDP(CastMode::Broadcast),
+    );
 
-    let reply = handler
+    let reply_opt = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
+
+    assert!(reply_opt.is_some());
+    let reply = reply_opt.unwrap();
 
     assert_eq!(reply.header.command, EncapsulationCommand::ListIdentity);
     assert_eq!(reply.header.status, EncapsulationStatus::Success);
@@ -88,11 +97,17 @@ fn handler_should_reply_status_error_for_unsupported_command() {
     };
 
     let mut encapsulation = RawEncapsulation::new(request_header, Bytes::new());
-    let mut context = ConnectionContext::new(TransportType::TCP);
+    let mut context = ConnectionContext::new(
+        SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
+        TransportType::TCP,
+    );
 
-    let reply = handler
+    let reply_opt = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
+
+    assert!(reply_opt.is_some());
+    let reply = reply_opt.unwrap();
 
     assert_eq!(
         reply.header.status,
@@ -118,11 +133,17 @@ fn handler_should_reply_status_error_for_partially_supported_commands() {
         };
 
         let mut encapsulation = RawEncapsulation::new(request_header, Bytes::new());
-        let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+        let mut context = ConnectionContext::new(
+            SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
+            TransportType::UDP(CastMode::Broadcast),
+        );
 
-        let reply = handler
+        let reply_opt = handler
             .handle(&mut encapsulation, &mut context)
             .expect("Should handle request");
+
+        assert!(reply_opt.is_some());
+        let reply = reply_opt.unwrap();
 
         assert_eq!(
             reply.header.status,
@@ -146,7 +167,10 @@ fn handler_should_not_reply_on_list_identity_error() {
     };
 
     let mut encapsulation = RawEncapsulation::new(request_header, Bytes::new());
-    let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+    let mut context = ConnectionContext::new(
+        SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
+        TransportType::UDP(CastMode::Broadcast),
+    );
 
     let reply_opt = handler.handle(&mut encapsulation, &mut context);
 
@@ -175,11 +199,17 @@ fn handler_should_reply_error_status_for_list_identity_payload_is_not_empty() {
     .expect("Should encode request payload");
 
     let mut encapsulation = RawEncapsulation::new(request_header, req_payload_bytes.freeze());
-    let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+    let mut context = ConnectionContext::new(
+        SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 0),
+        TransportType::UDP(CastMode::Broadcast),
+    );
 
-    let reply = handler
+    let reply_opt = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
+
+    assert!(reply_opt.is_some());
+    let reply = reply_opt.unwrap();
 
     assert_eq!(reply.header.command, EncapsulationCommand::ListIdentity);
     assert_eq!(reply.header.status, EncapsulationStatus::InvalidLength);

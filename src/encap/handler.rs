@@ -1,19 +1,15 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
-use crate::cip::registry::Registry;
-use crate::common::binary::ToBytes;
-use crate::encap::header::EncapsulationStatus;
-use crate::encap::{
+use super::{
     Encapsulation, RawEncapsulation,
-    command::{
-        EncapsulationCommand, list_identity::ListIdentityHandler,
-        register_session::RegisterSessionHandler,
-    },
+    command::{EncapsulationCommand, ListIdentityHandler, RegisterSessionHandler},
     error::{EncapsulationError, HandlerError, InternalError},
-    header::EncapsulationHeader,
+    header::{EncapsulationHeader, EncapsulationStatus},
     payload::EncapsulationPayload,
     session_manager::SessionManager,
 };
+use crate::cip::registry::Registry;
+use crate::common::binary::ToBytes;
 
 #[derive(Debug, PartialEq)]
 pub enum TransportType {
@@ -28,18 +24,23 @@ impl TransportType {
                 matches!(
                     command,
                     EncapsulationCommand::Nop
+                        | EncapsulationCommand::ListServices
+                        | EncapsulationCommand::ListIdentity
+                        | EncapsulationCommand::ListInterfaces
                         | EncapsulationCommand::RegisterSession
                         | EncapsulationCommand::UnregisterSession
                         | EncapsulationCommand::SendRRData
                         | EncapsulationCommand::SendUnitData
+                        | EncapsulationCommand::IndicateStatus
+                        | EncapsulationCommand::Cancel
                 )
             }
             TransportType::UDP(_) => {
                 matches!(
                     command,
-                    EncapsulationCommand::ListIdentity
+                    EncapsulationCommand::ListServices
+                        | EncapsulationCommand::ListIdentity
                         | EncapsulationCommand::ListInterfaces
-                        | EncapsulationCommand::ListServices
                 )
             }
         }
@@ -55,13 +56,15 @@ pub enum CastMode {
 
 pub struct ConnectionContext {
     pub session_handle: Option<u32>,
+    pub peer_addr: SocketAddr,
     pub transport_type: TransportType,
 }
 
 impl ConnectionContext {
-    pub fn new(transport_type: TransportType) -> Self {
+    pub fn new(peer_addr: SocketAddr, transport_type: TransportType) -> Self {
         Self {
             session_handle: None,
+            peer_addr,
             transport_type,
         }
     }
@@ -88,7 +91,7 @@ impl EncapsulationHandler {
         &self,
         req: &mut RawEncapsulation,
         context: &mut ConnectionContext,
-    ) -> Result<Encapsulation, InternalError> {
+    ) -> Result<Option<Encapsulation>, InternalError> {
         log::info!(
             "Received new request from transport: {:?}, command: {:?}",
             context.transport_type,
@@ -103,10 +106,11 @@ impl EncapsulationHandler {
 
         if !context.transport_type.is_valid_command(req.header.command) {
             if context.transport_type == TransportType::UDP(CastMode::Broadcast) {
-                return Err(InternalError::Other(format!(
+                log::warn!(
                     "Invalid or unsupported command for UDP broadcast (command: {:?})",
                     req.header.command
-                )));
+                );
+                return Ok(None);
             }
 
             return self.handle_error_reply(
@@ -116,10 +120,17 @@ impl EncapsulationHandler {
         }
 
         if req.header.status != EncapsulationStatus::Success {
-            return Err(InternalError::Other(format!(
+            log::warn!(
                 "Invalid status for request (command: {:?}, status: {:?})",
-                req.header.command, req.header.status
-            )));
+                req.header.command,
+                req.header.status
+            );
+            return Ok(None);
+        }
+
+        if req.header.command == EncapsulationCommand::Nop {
+            log::info!("Received NOP command no reply to send");
+            return Ok(None);
         }
 
         let req_encapsulation = match Encapsulation::try_from(req) {
@@ -134,7 +145,7 @@ impl EncapsulationHandler {
         );
 
         match self.dispatch(&req_encapsulation, context) {
-            Ok(encapsulation) => Ok(encapsulation),
+            Ok(encapsulation) => Ok(Some(encapsulation)),
             Err(error) => match error {
                 HandlerError::Protocol(p_error) => {
                     return self.handle_error_reply(&req_encapsulation.header, p_error);
@@ -148,7 +159,7 @@ impl EncapsulationHandler {
         &self,
         header: &EncapsulationHeader,
         error: EncapsulationError,
-    ) -> Result<Encapsulation, InternalError> {
+    ) -> Result<Option<Encapsulation>, InternalError> {
         log::warn!(
             "Handling error reply for command: {:?}, error: {:?}",
             header.command,
@@ -171,10 +182,10 @@ impl EncapsulationHandler {
             reply_payload
         );
 
-        Ok(Encapsulation {
+        Ok(Some(Encapsulation {
             header: reply_header,
             payload: reply_payload,
-        })
+        }))
     }
 }
 
@@ -186,10 +197,6 @@ impl EncapsulationHandler {
     ) -> Result<Encapsulation, HandlerError> {
         log::info!("Dispatching command {:?}", req.header.command);
         match req.header.command {
-            EncapsulationCommand::Nop => Ok(Encapsulation {
-                header: req.header.clone(),
-                payload: EncapsulationPayload::None,
-            }),
             EncapsulationCommand::ListIdentity => {
                 if let EncapsulationPayload::None = req.payload {
                     return self.list_identity_handler.handle(&req.header);

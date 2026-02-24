@@ -1,13 +1,11 @@
 use bytes::{BufMut, Bytes};
 
-use crate::{
-    common::binary::{BinaryError, ToBytes},
-    encap::{
-        error::EncapsulationError,
-        header::EncapsulationHeader,
-        payload::{EncapsulationPayload, EncapsulationPayloadFromBytes},
-    },
+use self::{
+    error::EncapsulationError,
+    header::EncapsulationHeader,
+    payload::{EncapsulationPayload, EncapsulationPayloadFromBytes},
 };
+use crate::common::binary::{BinaryError, ToBytes};
 
 pub mod command;
 pub mod cpf;
@@ -16,6 +14,8 @@ pub mod handler;
 pub mod header;
 pub mod payload;
 pub mod session_manager;
+
+pub use handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType};
 
 #[derive(Debug)]
 pub struct RawEncapsulation {

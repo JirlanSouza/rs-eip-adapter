@@ -1,12 +1,11 @@
-use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::{io, net::Ipv4Addr, sync::Arc};
+
+use futures_util::{sink::SinkExt, stream::StreamExt};
 use tokio::{net::UdpSocket, sync::broadcast::Sender};
 use tokio_util::udp::UdpFramed;
 
-use crate::{
-    encap::handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType},
-    transport::udp_codec::EncapsulationUdpCodec,
-};
+use super::udp_codec::EncapsulationUdpCodec;
+use crate::encap::{CastMode, ConnectionContext, EncapsulationHandler, TransportType};
 
 pub struct UdpTransport {
     ip_address: Ipv4Addr,
@@ -68,13 +67,17 @@ impl UdpTransport {
 
         let frame_result = frame_result_opt.unwrap();
         if let Ok((mut frame, peer_addr)) = frame_result {
-            let mut context = ConnectionContext::new(TransportType::UDP(CastMode::Broadcast));
+            let mut context =
+                ConnectionContext::new(peer_addr, TransportType::UDP(CastMode::Broadcast));
 
             match self.handler.handle(&mut frame, &mut context) {
-                Ok(reply) => {
+                Ok(Some(reply)) => {
                     if let Err(err) = framed.send((reply, peer_addr)).await {
                         log::error!("Failed to send reply to {} : {}", peer_addr, err);
                     }
+                }
+                Ok(None) => {
+                    log::info!("No reply to send to: {}", peer_addr);
                 }
                 Err(err) => {
                     log::error!("Failed to handle request from {} : {}", peer_addr, err);
