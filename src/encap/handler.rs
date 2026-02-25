@@ -2,7 +2,10 @@ use std::{net::SocketAddr, sync::Arc};
 
 use super::{
     Encapsulation, RawEncapsulation,
-    command::{EncapsulationCommand, ListIdentityHandler, RegisterSessionHandler},
+    command::{
+        EncapsulationCommand, list_identity::ListIdentityHandler,
+        register_session::RegisterSessionHandler, unregister_session::UnregisterSessionHandler,
+    },
     error::{EncapsulationError, HandlerError, InternalError},
     header::{EncapsulationHeader, EncapsulationStatus},
     payload::EncapsulationPayload,
@@ -70,11 +73,19 @@ impl ConnectionContext {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum HandlerAction {
+    Reply(Encapsulation),
+    DropConnection,
+    None,
+}
+
 pub struct EncapsulationHandler {
     _registry: Arc<Registry>,
     _session_manager: Arc<SessionManager>,
     list_identity_handler: ListIdentityHandler,
     register_session_handler: RegisterSessionHandler,
+    unregister_session_handler: UnregisterSessionHandler,
 }
 
 impl EncapsulationHandler {
@@ -84,6 +95,7 @@ impl EncapsulationHandler {
             _session_manager: session_manager.clone(),
             list_identity_handler: ListIdentityHandler::new(registry),
             register_session_handler: RegisterSessionHandler::new(session_manager),
+            unregister_session_handler: UnregisterSessionHandler,
         }
     }
 
@@ -91,7 +103,7 @@ impl EncapsulationHandler {
         &self,
         req: &mut RawEncapsulation,
         context: &mut ConnectionContext,
-    ) -> Result<Option<Encapsulation>, InternalError> {
+    ) -> Result<HandlerAction, InternalError> {
         log::info!(
             "Received new request from transport: {:?}, command: {:?}",
             context.transport_type,
@@ -110,7 +122,7 @@ impl EncapsulationHandler {
                     "Invalid or unsupported command for UDP broadcast (command: {:?})",
                     req.header.command
                 );
-                return Ok(None);
+                return Ok(HandlerAction::None);
             }
 
             return self.handle_error_reply(
@@ -125,12 +137,12 @@ impl EncapsulationHandler {
                 req.header.command,
                 req.header.status
             );
-            return Ok(None);
+            return Ok(HandlerAction::None);
         }
 
         if req.header.command == EncapsulationCommand::Nop {
             log::info!("Received NOP command no reply to send");
-            return Ok(None);
+            return Ok(HandlerAction::None);
         }
 
         let req_encapsulation = match Encapsulation::try_from(req) {
@@ -145,7 +157,7 @@ impl EncapsulationHandler {
         );
 
         match self.dispatch(&req_encapsulation, context) {
-            Ok(encapsulation) => Ok(Some(encapsulation)),
+            Ok(action) => Ok(action),
             Err(error) => match error {
                 HandlerError::Protocol(p_error) => {
                     return self.handle_error_reply(&req_encapsulation.header, p_error);
@@ -159,7 +171,7 @@ impl EncapsulationHandler {
         &self,
         header: &EncapsulationHeader,
         error: EncapsulationError,
-    ) -> Result<Option<Encapsulation>, InternalError> {
+    ) -> Result<HandlerAction, InternalError> {
         log::warn!(
             "Handling error reply for command: {:?}, error: {:?}",
             header.command,
@@ -182,19 +194,17 @@ impl EncapsulationHandler {
             reply_payload
         );
 
-        Ok(Some(Encapsulation {
+        Ok(HandlerAction::Reply(Encapsulation {
             header: reply_header,
             payload: reply_payload,
         }))
     }
-}
 
-impl EncapsulationHandler {
     fn dispatch(
         &self,
         req: &Encapsulation,
         context: &mut ConnectionContext,
-    ) -> Result<Encapsulation, HandlerError> {
+    ) -> Result<HandlerAction, HandlerError> {
         log::info!("Dispatching command {:?}", req.header.command);
         match req.header.command {
             EncapsulationCommand::ListIdentity => {
@@ -216,6 +226,16 @@ impl EncapsulationHandler {
                         "Invalid payload to register session".to_string(),
                     )))
                 }
+            }
+            EncapsulationCommand::UnregisterSession => {
+                if let EncapsulationPayload::None = req.payload {
+                    return self.unregister_session_handler.handle(&req.header, context);
+                }
+
+                Err(HandlerError::from(EncapsulationError::InvalidLength {
+                    expected: 0,
+                    actual: req.payload.encoded_len(),
+                }))
             }
             _ => Err(HandlerError::from(
                 EncapsulationError::InvalidOrUnsupportedCommand(req.header.command),

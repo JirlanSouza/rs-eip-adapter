@@ -2,3 +2,4 @@ pub mod list_identity_e2e;
 pub mod nop_e2e;
 pub mod register_session_e2e;
 pub mod udp_discovery_robustness_e2e;
+pub mod unregister_session_e2e;

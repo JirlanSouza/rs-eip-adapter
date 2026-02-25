@@ -1,8 +1,6 @@
 pub mod list_identity;
 pub mod register_session;
-
-pub use list_identity::ListIdentityHandler;
-pub use register_session::{RegisterSessionData, RegisterSessionHandler};
+pub mod unregister_session;
 
 #[repr(u16)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

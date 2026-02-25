@@ -2,11 +2,11 @@ use bytes::{Buf, BufMut, Bytes};
 
 use crate::common::binary::{BinaryError, FromBytes, ToBytes};
 use crate::encap::{
-    command::{EncapsulationCommand, RegisterSessionData},
+    command::{EncapsulationCommand, register_session::RegisterSessionData},
     cpf::Cpf,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EncapsulationPayload {
     None,
     Nop(Bytes),

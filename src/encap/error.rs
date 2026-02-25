@@ -1,12 +1,10 @@
 use std::{fmt::Display, io};
 
-use crate::{
-    common::binary::BinaryError,
-    encap::{
-        command::{EncapsulationCommand, register_session::RegisterSessionData},
-        header::EncapsulationStatus,
-    },
+use super::{
+    EncapsulationStatus,
+    command::{EncapsulationCommand, register_session::RegisterSessionData},
 };
+use crate::common::binary::BinaryError;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum EncapsulationError {

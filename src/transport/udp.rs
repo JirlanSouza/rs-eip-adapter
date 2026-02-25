@@ -5,7 +5,9 @@ use tokio::{net::UdpSocket, sync::broadcast::Sender};
 use tokio_util::udp::UdpFramed;
 
 use super::udp_codec::EncapsulationUdpCodec;
-use crate::encap::{CastMode, ConnectionContext, EncapsulationHandler, TransportType};
+use crate::encap::{
+    CastMode, ConnectionContext, EncapsulationHandler, TransportType, handler::HandlerAction,
+};
 
 pub struct UdpTransport {
     ip_address: Ipv4Addr,
@@ -71,13 +73,16 @@ impl UdpTransport {
                 ConnectionContext::new(peer_addr, TransportType::UDP(CastMode::Broadcast));
 
             match self.handler.handle(&mut frame, &mut context) {
-                Ok(Some(reply)) => {
+                Ok(HandlerAction::Reply(reply)) => {
                     if let Err(err) = framed.send((reply, peer_addr)).await {
                         log::error!("Failed to send reply to {} : {}", peer_addr, err);
                     }
                 }
-                Ok(None) => {
+                Ok(HandlerAction::None) => {
                     log::info!("No reply to send to: {}", peer_addr);
+                }
+                Ok(HandlerAction::DropConnection) => {
+                    log::warn!("Received a HandlerAction::DropConnection in UDP transport");
                 }
                 Err(err) => {
                     log::error!("Failed to handle request from {} : {}", peer_addr, err);

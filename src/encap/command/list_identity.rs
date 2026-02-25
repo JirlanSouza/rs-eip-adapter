@@ -7,6 +7,7 @@ use crate::cip::{
 use crate::common::binary::ToBytes;
 use crate::encap::Encapsulation;
 use crate::encap::error::HandlerError;
+use crate::encap::handler::HandlerAction;
 use crate::encap::header::EncapsulationStatus;
 use crate::encap::{
     cpf::{Cpf, cpf_item::CpfItem, identity_item::IdentityItem},
@@ -24,7 +25,7 @@ impl ListIdentityHandler {
         Self { registry }
     }
 
-    pub fn handle(&self, req_header: &EncapsulationHeader) -> Result<Encapsulation, HandlerError> {
+    pub fn handle(&self, req_header: &EncapsulationHeader) -> Result<HandlerAction, HandlerError> {
         log::info!("Handle ListIdentity request: {:?}", req_header);
         let identity = self
             .registry
@@ -48,7 +49,7 @@ impl ListIdentityHandler {
             ..req_header.clone()
         };
         match Encapsulation::new(reply_header, reply_payload) {
-            Ok(encapsulation) => Ok(encapsulation),
+            Ok(encapsulation) => Ok(HandlerAction::Reply(encapsulation)),
             Err(error) => Err(HandlerError::Internal(InternalError::Other(
                 error.to_string(),
             ))),

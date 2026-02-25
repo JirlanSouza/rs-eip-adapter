@@ -1,10 +1,6 @@
 use bytes::{BufMut, Bytes};
 
-use self::{
-    error::EncapsulationError,
-    header::EncapsulationHeader,
-    payload::{EncapsulationPayload, EncapsulationPayloadFromBytes},
-};
+use self::payload::EncapsulationPayloadFromBytes;
 use crate::common::binary::{BinaryError, ToBytes};
 
 pub mod command;
@@ -15,7 +11,10 @@ pub mod header;
 pub mod payload;
 pub mod session_manager;
 
-pub use handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType};
+pub use self::error::{EncapsulationError, HandlerError};
+pub use self::handler::{CastMode, ConnectionContext, EncapsulationHandler, TransportType};
+pub use self::header::{EncapsulationHeader, EncapsulationStatus};
+pub use self::payload::EncapsulationPayload;
 
 #[derive(Debug)]
 pub struct RawEncapsulation {
@@ -41,7 +40,7 @@ impl TryFrom<&mut RawEncapsulation> for Encapsulation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Encapsulation {
     pub header: EncapsulationHeader,
     pub payload: EncapsulationPayload,

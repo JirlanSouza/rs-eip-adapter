@@ -6,7 +6,7 @@ use crate::{
     encap::{
         Encapsulation, EncapsulationHeader,
         error::{EncapsulationError, HandlerError},
-        handler::ConnectionContext,
+        handler::{ConnectionContext, HandlerAction},
         header::EncapsulationStatus,
         payload::EncapsulationPayload,
         session_manager::SessionManager,
@@ -74,7 +74,7 @@ impl RegisterSessionHandler {
         req_header: &EncapsulationHeader,
         req_payload: &RegisterSessionData,
         context: &mut ConnectionContext,
-    ) -> Result<Encapsulation, HandlerError> {
+    ) -> Result<HandlerAction, HandlerError> {
         if req_payload.protocol_version > Encapsulation::VERSION || req_payload.options != 0 {
             let reply_payload = RegisterSessionData {
                 protocol_version: Encapsulation::VERSION,
@@ -92,13 +92,13 @@ impl RegisterSessionHandler {
         };
 
         context.session_handle = Some(session_handle);
-        Ok(Encapsulation {
+        Ok(HandlerAction::Reply(Encapsulation {
             header: EncapsulationHeader {
                 status: EncapsulationStatus::Success,
                 session_handle,
                 ..req_header.clone()
             },
             payload: EncapsulationPayload::RegisterSession(reply_payload),
-        })
+        }))
     }
 }

@@ -12,7 +12,9 @@ use tokio::{
 use tokio_util::codec::Framed;
 
 use super::codec::EncapsulationCodec;
-use crate::encap::{ConnectionContext, EncapsulationHandler, TransportType};
+use crate::encap::{
+    ConnectionContext, EncapsulationHandler, TransportType, handler::HandlerAction,
+};
 
 pub struct TcpTransport {
     tcp_listener: TcpListener,
@@ -76,7 +78,13 @@ impl TcpTransport {
 
         loop {
             tokio::select! {
-                _ = self.handle_framed(&mut framed, &mut context) => {},
+                result = self.handle_framed(&mut framed, &mut context) => {
+                    if result.is_none() {
+                        log::error!("Closing TCP connection: {}", context.peer_addr);
+                        let _ = framed.close().await;
+                        break;
+                    }
+                },
                 _ = connection_shutdown_rx.recv() => {
                     log::info!("TCP connection shutting down: {}", src);
                     let _ = framed.close().await;
@@ -90,37 +98,45 @@ impl TcpTransport {
         &self,
         framed: &mut Framed<TcpStream, EncapsulationCodec>,
         context: &mut ConnectionContext,
-    ) {
+    ) -> Option<()> {
         let frame_result_opt = framed.next().await;
 
         if frame_result_opt.is_none() {
             log::error!("Failed to receive TCP frame");
-            return;
+            return Some(());
         }
 
         let frame_result = frame_result_opt.unwrap();
         if let Ok(mut frame) = frame_result {
-            match self.handler.handle(&mut frame, context) {
-                Ok(Some(reply)) => {
+            return match self.handler.handle(&mut frame, context) {
+                Ok(HandlerAction::Reply(reply)) => {
                     log::debug!("Sending reply: ({:?})", reply);
 
                     if let Err(err) = framed.send(reply).await {
                         log::error!("Failed to send reply: {}", err);
                     }
+
+                    Some(())
                 }
-                Ok(None) => {
+                Ok(HandlerAction::None) => {
                     log::info!("No reply to send to: {}", context.peer_addr);
+                    Some(())
+                }
+                Ok(HandlerAction::DropConnection) => {
+                    log::info!("Dropping connection to: {}", context.peer_addr);
+                    None
                 }
                 Err(err) => {
                     log::error!("Failed to handle request: {}", err);
+                    None
                 }
-            }
-            return;
+            };
+        } else {
+            log::error!(
+                "Failed to decode TCP datagram: {}",
+                frame_result.unwrap_err()
+            );
+            Some(())
         }
-
-        log::error!(
-            "Failed to decode TCP datagram: {}",
-            frame_result.unwrap_err()
-        );
     }
 }

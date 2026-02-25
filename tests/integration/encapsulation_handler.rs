@@ -16,6 +16,7 @@ use rs_eip_adapter::{
     encap::{
         CastMode, ConnectionContext, EncapsulationHandler, RawEncapsulation, TransportType,
         command::{EncapsulationCommand, register_session::RegisterSessionData},
+        handler::HandlerAction,
         header::{EncapsulationHeader, EncapsulationStatus},
         payload::EncapsulationPayload,
         session_manager::SessionManager,
@@ -71,12 +72,13 @@ fn handler_reply_status_success_for_list_identity() {
         TransportType::UDP(CastMode::Broadcast),
     );
 
-    let reply_opt = handler
+    let action = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
 
-    assert!(reply_opt.is_some());
-    let reply = reply_opt.unwrap();
+    let HandlerAction::Reply(reply) = action else {
+        panic!("Expected HandlerAction::Reply, but got {:?}", action);
+    };
 
     assert_eq!(reply.header.command, EncapsulationCommand::ListIdentity);
     assert_eq!(reply.header.status, EncapsulationStatus::Success);
@@ -102,12 +104,13 @@ fn handler_should_reply_status_error_for_unsupported_command() {
         TransportType::TCP,
     );
 
-    let reply_opt = handler
+    let action = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
 
-    assert!(reply_opt.is_some());
-    let reply = reply_opt.unwrap();
+    let HandlerAction::Reply(reply) = action else {
+        panic!("Expected HandlerAction::Reply, but got {:?}", action);
+    };
 
     assert_eq!(
         reply.header.status,
@@ -138,12 +141,13 @@ fn handler_should_reply_status_error_for_partially_supported_commands() {
             TransportType::UDP(CastMode::Broadcast),
         );
 
-        let reply_opt = handler
+        let action = handler
             .handle(&mut encapsulation, &mut context)
             .expect("Should handle request");
 
-        assert!(reply_opt.is_some());
-        let reply = reply_opt.unwrap();
+        let HandlerAction::Reply(reply) = action else {
+            panic!("Expected HandlerAction::Reply, but got {:?}", action);
+        };
 
         assert_eq!(
             reply.header.status,
@@ -172,9 +176,9 @@ fn handler_should_not_reply_on_list_identity_error() {
         TransportType::UDP(CastMode::Broadcast),
     );
 
-    let reply_opt = handler.handle(&mut encapsulation, &mut context);
+    let result = handler.handle(&mut encapsulation, &mut context);
 
-    assert!(reply_opt.is_err());
+    assert!(matches!(result, Err(_)));
 }
 
 #[test]
@@ -204,12 +208,13 @@ fn handler_should_reply_error_status_for_list_identity_payload_is_not_empty() {
         TransportType::UDP(CastMode::Broadcast),
     );
 
-    let reply_opt = handler
+    let action = handler
         .handle(&mut encapsulation, &mut context)
         .expect("Should handle request");
 
-    assert!(reply_opt.is_some());
-    let reply = reply_opt.unwrap();
+    let HandlerAction::Reply(reply) = action else {
+        panic!("Expected HandlerAction::Reply, but got {:?}", action);
+    };
 
     assert_eq!(reply.header.command, EncapsulationCommand::ListIdentity);
     assert_eq!(reply.header.status, EncapsulationStatus::InvalidLength);
