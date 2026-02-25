@@ -63,7 +63,7 @@ pub trait CpfItemDataFromBytes: Sized {
 
 pub trait CpfItemDataToBytes: ToBytes {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CpfItem {
     NullAddress,
     ConnectedAddress,

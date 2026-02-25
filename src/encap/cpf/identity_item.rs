@@ -7,7 +7,7 @@ use crate::cip::{
 use crate::common::binary::{BinaryError, FromBytes, ToBytes};
 use crate::encap::cpf::cpf_item::{CpfItemDataFromBytes, CpfItemDataToBytes};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct IdentityItem {
     pub protocol_version: u16,
     pub sin_family: u16,

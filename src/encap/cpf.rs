@@ -6,7 +6,7 @@ use crate::encap::cpf::cpf_item::CpfItem;
 pub mod cpf_item;
 pub mod identity_item;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Cpf {
     pub items: Vec<CpfItem>,
 }
