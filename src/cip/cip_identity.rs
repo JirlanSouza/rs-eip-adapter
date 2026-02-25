@@ -17,7 +17,8 @@ pub struct IdentityInfo {
 use crate::cip::{
     CipClassId,
     cip_class::{CipClass, CipInstance},
-    cip_error::CipError, data_types::short_string::ShortString,
+    cip_error::CipError,
+    data_types::short_string::ShortString,
 };
 
 pub struct IdentityClass {
@@ -65,13 +66,10 @@ impl CipClass for IdentityClass {
             return Err(CipError::ObjectDoesNotExist);
         }
 
-        let read_guard = self
-            .instance
-            .read()
-            .map_err(|_| {
-                log::error!("Failed to get read guard for IdentityClass instance");
-                CipError::GeneralError
-            })?;
+        let read_guard = self.instance.read().map_err(|_| {
+            log::error!("Failed to get read guard for IdentityClass instance");
+            CipError::GeneralError
+        })?;
 
         let inst = Arc::clone(&read_guard);
         Ok(inst as Arc<dyn CipInstance>)

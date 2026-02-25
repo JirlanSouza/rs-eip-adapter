@@ -80,8 +80,11 @@ impl TcpTransport {
             tokio::select! {
                 result = self.handle_framed(&mut framed, &mut context) => {
                     if result.is_none() {
-                        log::error!("Closing TCP connection: {}", context.peer_addr);
-                        let _ = framed.close().await;
+                        log::info!("Closing TCP connection: {}", context.peer_addr);
+                        match framed.close().await {
+                            Ok(_) => log::info!("TCP connection closed"),
+                            Err(err) => log::error!("Failed to close TCP connection: {}", err),
+                        }
                         break;
                     }
                 },

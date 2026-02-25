@@ -42,11 +42,14 @@ impl CipClass for TcpIpInterfaceClass {
         if instance_id == 0 {
             return Err(CipError::GeneralError);
         }
-        
+
         self.instances
             .read()
             .map_err(|_| {
-                log::error!("Failed to get read guard for TcpIpInterface instance: {}", instance_id);
+                log::error!(
+                    "Failed to get read guard for TcpIpInterface instance: {}",
+                    instance_id
+                );
                 CipError::GeneralError
             })?
             .get((instance_id - 1) as usize)

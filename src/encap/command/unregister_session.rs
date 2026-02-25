@@ -19,19 +19,6 @@ impl UnregisterSessionHandler {
             .into());
         }
 
-        match context.session_handle {
-            Some(session_handle) => {
-                if header.session_handle != session_handle {
-                    return Err(
-                        EncapsulationError::InvalidSessionHandle(header.session_handle).into(),
-                    );
-                }
-            }
-            None => {
-                return Err(EncapsulationError::InvalidSessionHandle(header.session_handle).into());
-            }
-        }
-
         context.session_handle = None;
         log::info!("Session unregistered: {}", header.session_handle);
 

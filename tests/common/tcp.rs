@@ -66,15 +66,28 @@ impl TcpConnection {
 
     pub async fn is_connected(&self) -> bool {
         let mut buf = [0u8; 1];
-        self.client.peek(&mut buf).await.is_ok()
+        match time::timeout(
+            std::time::Duration::from_millis(50),
+            self.client.peek(&mut buf),
+        )
+        .await
+        {
+            Ok(Ok(0)) => false,  // Peer gracefully closed the connection
+            Ok(Ok(_)) => true,   // Peer sent data, connection is open
+            Ok(Err(_)) => false, // Connection error (e.g., reset)
+            Err(_) => true,      // Timeout, connection is open without data
+        }
     }
 
-    pub async fn send_and_receive(&mut self, request_buf: Bytes, receive_len: usize, timeout: u16) -> Option<Bytes> {
+    pub async fn send_and_receive(
+        &mut self,
+        request_buf: Bytes,
+        receive_len: usize,
+        timeout: u16,
+    ) -> Option<Bytes> {
         let mut response = vec![0u8; receive_len];
         match time::timeout(std::time::Duration::from_millis(timeout as u64), async {
-            self.client
-                .write_all(&request_buf)
-                .await?;
+            self.client.write_all(&request_buf).await?;
             self.client.read_exact(&mut response).await?;
             Ok::<(), io::Error>(())
         })
