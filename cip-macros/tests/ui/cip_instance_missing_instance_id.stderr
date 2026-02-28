@@ -1,0 +1,27 @@
+error: The field 'class_code' must be of type 'ClassCode'
+ --> tests/ui/cip_instance_missing_instance_id.rs:5:17
+  |
+5 |     class_code: u8,
+  |                 ^^
+
+error: A struct must have a field 'instance_id: u16' to use #[cip_instance]
+ --> tests/ui/cip_instance_missing_instance_id.rs:4:8
+  |
+4 | struct MyInstance {
+  |        ^^^^^^^^^^
+
+error[E0405]: cannot find trait `CipInstance` in this scope
+ --> tests/ui/cip_instance_missing_instance_id.rs:3:1
+  |
+3 | #[cip_instance]
+  | ^^^^^^^^^^^^^^^ not found in this scope
+  |
+  = note: this error originates in the attribute macro `cip_instance` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0412]: cannot find type `ClassCode` in this scope
+ --> tests/ui/cip_instance_missing_instance_id.rs:3:1
+  |
+3 | #[cip_instance]
+  | ^^^^^^^^^^^^^^^ not found in this scope
+  |
+  = note: this error originates in the attribute macro `cip_instance` (in Nightly builds, run with -Z macro-backtrace for more info)

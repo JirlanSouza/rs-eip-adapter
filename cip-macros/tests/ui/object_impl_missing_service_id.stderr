@@ -1,0 +1,58 @@
+error: The #[service] attribute expects an ID. Ex: #[service(0x0E)]
+  --> tests/ui/object_impl_missing_service_id.rs:16:5
+   |
+16 |     #[service]
+   |     ^
+
+error[E0412]: cannot find type `CipResult` in this scope
+  --> tests/ui/object_impl_missing_service_id.rs:14:1
+   |
+14 | #[object_impl]
+   | ^^^^^^^^^^^^^^ help: an enum with a similar name exists: `Result`
+   |
+  ::: $RUST/core/src/result.rs
+   |
+   | pub enum Result<T, E> {
+   | --------------------- similarly named enum `Result` defined here
+   |
+   = note: this error originates in the attribute macro `object_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of undeclared type `CipError`
+  --> tests/ui/object_impl_missing_service_id.rs:14:1
+   |
+14 | #[object_impl]
+   | ^^^^^^^^^^^^^^ use of undeclared type `CipError`
+   |
+   = note: this error originates in the attribute macro `object_impl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bytes`
+ --> tests/ui/object_impl_missing_service_id.rs:7:14
+  |
+7 |         req: bytes::Bytes,
+  |              ^^^^^ use of unresolved module or unlinked crate `bytes`
+  |
+  = help: if you wanted to use a crate named `bytes`, use `cargo add bytes` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bytes`
+ --> tests/ui/object_impl_missing_service_id.rs:8:20
+  |
+8 |         resp: &mut bytes::BytesMut,
+  |                    ^^^^^ use of unresolved module or unlinked crate `bytes`
+  |
+  = help: if you wanted to use a crate named `bytes`, use `cargo add bytes` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bytes`
+  --> tests/ui/object_impl_missing_service_id.rs:17:32
+   |
+17 |     fn my_service(&self, _req: bytes::Bytes, _resp: &mut bytes::BytesMut) -> Result<(), ()> {
+   |                                ^^^^^ use of unresolved module or unlinked crate `bytes`
+   |
+   = help: if you wanted to use a crate named `bytes`, use `cargo add bytes` to add it to your `Cargo.toml`
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `bytes`
+  --> tests/ui/object_impl_missing_service_id.rs:17:58
+   |
+17 |     fn my_service(&self, _req: bytes::Bytes, _resp: &mut bytes::BytesMut) -> Result<(), ()> {
+   |                                                          ^^^^^ use of unresolved module or unlinked crate `bytes`
+   |
+   = help: if you wanted to use a crate named `bytes`, use `cargo add bytes` to add it to your `Cargo.toml`

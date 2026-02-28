@@ -1,0 +1,9 @@
+use cip_macros::cip_instance;
+
+#[cip_instance]
+struct MyInstance {
+    instance_id: u32,
+    class_code: u8,
+}
+
+fn main() {}

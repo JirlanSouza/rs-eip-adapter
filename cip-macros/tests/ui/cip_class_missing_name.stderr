@@ -1,0 +1,7 @@
+error: Missing field `name`
+ --> tests/ui/cip_class_missing_name.rs:3:1
+  |
+3 | #[cip_class(id = ClassCode::Identity)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `cip_class` (in Nightly builds, run with -Z macro-backtrace for more info)
