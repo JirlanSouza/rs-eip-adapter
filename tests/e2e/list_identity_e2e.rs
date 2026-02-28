@@ -123,7 +123,7 @@ async fn list_identity_success_reply_is_correct() {
     );
 
     let state = reply_buf[name_end_index];
-    assert_eq!(state, 0x00);
+    assert_eq!(state, 0xFF);
     context.stop().await;
 }
 

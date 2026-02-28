@@ -7,8 +7,8 @@ use bytes::{Bytes, BytesMut};
 
 use rs_eip_adapter::{
     cip::{
-        cip_class::CipClass,
         cip_identity::{IdentityClass, IdentityInfo},
+        common::object::CipClass,
         registry::Registry,
         tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance},
     },
@@ -39,6 +39,7 @@ fn build_handler() -> EncapsulationHandler {
 
     let tcp_interface_class = Arc::new(TcpIpInterfaceClass::new());
     let tcp_interface_instance = Arc::new(TcpIpInterfaceInstance::new(
+        1,
         Arc::downgrade(&(tcp_interface_class.clone() as Arc<dyn CipClass>)),
         Ipv4Addr::LOCALHOST,
     ));

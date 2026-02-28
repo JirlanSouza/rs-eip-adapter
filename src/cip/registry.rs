@@ -1,5 +1,7 @@
-use crate::cip::{CipClassId, cip_class::CipClass};
 use std::{collections::HashMap, sync::Arc};
+
+use super::ClassCode;
+use super::common::object::CipClass;
 
 pub struct Registry {
     classes: HashMap<u16, Arc<dyn CipClass>>,
@@ -23,7 +25,7 @@ impl Registry {
 
     pub fn get_instance<T: 'static + Send + Sync>(
         &self,
-        class_id: CipClassId,
+        class_id: ClassCode,
         instance_id: u16,
     ) -> Result<Arc<T>, String> {
         log::debug!(
@@ -32,7 +34,7 @@ impl Registry {
             instance_id
         );
         let class = self
-            .get(class_id.to_u16())
+            .get(class_id.into())
             .ok_or(format!("Class {} not found", class_id))?;
         let instance_ptr = class
             .instance(instance_id)
@@ -48,7 +50,6 @@ impl Registry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cip::cip_class::CipClass;
     use crate::cip::cip_identity::{IdentityClass, IdentityInfo, IdentityInstance};
     use crate::cip::tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance};
     use std::net::Ipv4Addr;
@@ -57,7 +58,7 @@ mod tests {
     #[test]
     fn register_and_get_class_by_id() {
         let mut registry = Registry::new();
-        let identity_class_id = CipClassId::IdentityClassId.to_u16();
+        let identity_class_id = ClassCode::IdentityClassId.into();
         let identity_info = IdentityInfo {
             vendor_id: 0x1111,
             device_type: 0x2222,
@@ -94,7 +95,7 @@ mod tests {
         registry.register(identity_class.clone());
 
         let identity_instance = registry
-            .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
             .expect("expected identity instance");
 
         assert_eq!(identity_instance.vendor_id, identity_info.vendor_id);
@@ -109,7 +110,7 @@ mod tests {
         let registry = Registry::new();
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
             .unwrap_err();
 
         assert!(error_message.contains("not found"));
@@ -131,7 +132,7 @@ mod tests {
         registry.register(identity_class.clone());
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 2)
+            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 2)
             .unwrap_err();
 
         assert!(error_message.contains("Instance"));
@@ -142,6 +143,7 @@ mod tests {
         let mut registry = Registry::new();
         let tcp_class = Arc::new(TcpIpInterfaceClass::new());
         let tcp_instance = Arc::new(TcpIpInterfaceInstance::new(
+            1,
             Arc::downgrade(&(tcp_class.clone() as Arc<dyn CipClass>)),
             Ipv4Addr::LOCALHOST,
         ));
@@ -149,7 +151,7 @@ mod tests {
         registry.register(tcp_class.clone());
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(CipClassId::TcpIpInterfaceClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::TcpIpInterfaceClassId, 1)
             .unwrap_err();
 
         assert!(error_message.contains("downcast"));

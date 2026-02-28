@@ -4,10 +4,12 @@ use std::{
     sync::{Arc, RwLock, Weak},
 };
 
-use crate::cip::{
-    CipClassId,
-    cip_class::{CipClass, CipInstance},
-    cip_error::CipError,
+use crate::cip::common::object::CipObject;
+
+use super::{
+    ClassCode,
+    common::error::CipError,
+    common::object::{CipClass, CipInstance},
 };
 
 const AF_INET: u16 = 2;
@@ -22,7 +24,7 @@ pub struct TcpIpInterfaceClass {
 impl TcpIpInterfaceClass {
     pub fn new() -> Self {
         Self {
-            class_id: CipClassId::TcpIpInterfaceClassId.to_u16(),
+            class_id: ClassCode::TcpIpInterfaceClassId.into(),
             class_name: "TcpIpInterfaceClass",
             instances: RwLock::new(Vec::with_capacity(2)),
         }
@@ -71,15 +73,31 @@ impl CipClass for TcpIpInterfaceClass {
     }
 }
 
+impl CipObject for TcpIpInterfaceClass {
+    fn execute_service(
+        &self,
+        _service_id: u8,
+        _req: bytes::Bytes,
+        _resp: &mut bytes::BytesMut,
+    ) -> super::common::object::CipResult {
+        todo!()
+    }
+}
+
 #[derive(Debug)]
 pub struct TcpIpInterfaceInstance {
+    instance_id: u16,
     class: Weak<dyn CipClass>,
     address: Ipv4Addr,
 }
 
 impl TcpIpInterfaceInstance {
-    pub fn new(class: Weak<dyn CipClass>, address: Ipv4Addr) -> Self {
-        Self { class, address }
+    pub fn new(instance_id: u16, class: Weak<dyn CipClass>, address: Ipv4Addr) -> Self {
+        Self {
+            instance_id,
+            class,
+            address,
+        }
     }
 
     pub fn as_any(&self) -> &dyn Any {
@@ -110,5 +128,20 @@ impl CipInstance for TcpIpInterfaceInstance {
 
     fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
         self
+    }
+
+    fn instance_id(&self) -> u16 {
+        self.instance_id
+    }
+}
+
+impl CipObject for TcpIpInterfaceInstance {
+    fn execute_service(
+        &self,
+        _service_id: u8,
+        _req: bytes::Bytes,
+        _resp: &mut bytes::BytesMut,
+    ) -> super::common::object::CipResult {
+        todo!()
     }
 }

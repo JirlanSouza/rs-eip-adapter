@@ -1,45 +1,57 @@
 use std::fmt::Display;
 
-pub mod cip_class;
-pub mod cip_error;
 pub mod cip_identity;
+pub mod common;
 pub mod data_types;
 pub mod registry;
 pub mod tcp_ip_interface;
 
 #[repr(u16)]
-pub enum CipClassId {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassCode {
     IdentityClassId = 0x01,
     TcpIpInterfaceClassId = 0xF5,
     UserDefinedClassId(u16),
 }
 
-impl CipClassId {
-    pub fn from_u16(id: u16) -> Option<Self> {
+impl From<u16> for ClassCode {
+    fn from(id: u16) -> Self {
         match id {
-            0x01 => Some(CipClassId::IdentityClassId),
-            0x02 => Some(CipClassId::TcpIpInterfaceClassId),
-            _ => Some(CipClassId::UserDefinedClassId(id)),
-        }
-    }
-
-    pub fn to_u16(&self) -> u16 {
-        match self {
-            CipClassId::IdentityClassId => 0x01,
-            CipClassId::TcpIpInterfaceClassId => 0x02,
-            CipClassId::UserDefinedClassId(id) => *id,
+            0x01 => ClassCode::IdentityClassId,
+            0xF5 => ClassCode::TcpIpInterfaceClassId,
+            _ => ClassCode::UserDefinedClassId(id),
         }
     }
 }
 
-impl Display for CipClassId {
+impl From<&ClassCode> for u16 {
+    fn from(id: &ClassCode) -> Self {
+        match id {
+            ClassCode::IdentityClassId => 0x01,
+            ClassCode::TcpIpInterfaceClassId => 0xF5,
+            ClassCode::UserDefinedClassId(id) => *id,
+        }
+    }
+}
+
+impl From<ClassCode> for u16 {
+    fn from(id: ClassCode) -> Self {
+        match id {
+            ClassCode::IdentityClassId => 0x01,
+            ClassCode::TcpIpInterfaceClassId => 0xF5,
+            ClassCode::UserDefinedClassId(id) => id,
+        }
+    }
+}
+
+impl Display for ClassCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CipClassId::IdentityClassId => write!(f, "{}: Identity Class", self.to_u16()),
-            CipClassId::TcpIpInterfaceClassId => {
-                write!(f, "{}: TCP/IP Interface Class", self.to_u16())
+            ClassCode::IdentityClassId => write!(f, "{:#04x}: Identity", u16::from(self)),
+            ClassCode::TcpIpInterfaceClassId => {
+                write!(f, "{:#04x}: TCP/IP Interface", u16::from(self))
             }
-            CipClassId::UserDefinedClassId(id) => write!(f, "{}: User Defined Class", id),
+            ClassCode::UserDefinedClassId(id) => write!(f, "{:#04x}: User Defined", id),
         }
     }
 }

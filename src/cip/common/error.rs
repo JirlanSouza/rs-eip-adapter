@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::common::binary::BinaryError;
+
 #[derive(Debug)]
 pub enum CipError {
     Success = 0x00,
@@ -50,6 +52,16 @@ pub enum CipError {
 impl From<CipError> for u8 {
     fn from(value: CipError) -> Self {
         value as u8
+    }
+}
+
+impl From<BinaryError> for CipError {
+    fn from(value: BinaryError) -> Self {
+        match value {
+            BinaryError::BufferTooSmall { .. } => CipError::ReplyDataTooLarge,
+            BinaryError::Truncated { .. } => CipError::NotEnoughData,
+            BinaryError::InvalidData { .. } => CipError::InvalidParameterValue,
+        }
     }
 }
 

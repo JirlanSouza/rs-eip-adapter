@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cip::{
-    CipClassId, cip_identity::IdentityInstance, registry::Registry,
+    ClassCode, cip_identity::IdentityInstance, registry::Registry,
     tcp_ip_interface::TcpIpInterfaceInstance,
 };
 use crate::common::binary::ToBytes;
@@ -29,11 +29,11 @@ impl ListIdentityHandler {
         log::info!("Handle ListIdentity request: {:?}", req_header);
         let identity = self
             .registry
-            .get_instance::<IdentityInstance>(CipClassId::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
             .map_err(HandlerError::from)?;
         let tcp_ip_if = self
             .registry
-            .get_instance::<TcpIpInterfaceInstance>(CipClassId::TcpIpInterfaceClassId, 1)
+            .get_instance::<TcpIpInterfaceInstance>(ClassCode::TcpIpInterfaceClassId, 1)
             .map_err(HandlerError::from)?;
         log::debug!("List identiry with TCP/IP Interface: {:?}", tcp_ip_if);
         log::debug!("List identity with Identity: {:?}", identity);

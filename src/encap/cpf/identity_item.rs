@@ -42,12 +42,12 @@ impl IdentityItem {
             vendor_id: identity.vendor_id,
             device_type: identity.device_type,
             product_code: identity.product_code,
-            revision_major: identity.revision_major,
-            revision_minor: identity.revision_minor,
+            revision_major: identity.revision.major,
+            revision_minor: identity.revision.minor,
             status: identity.status,
             serial_number: identity.serial_number,
             product_name: identity.product_name,
-            state: identity.state,
+            state: identity.state.into(),
         }
     }
 }

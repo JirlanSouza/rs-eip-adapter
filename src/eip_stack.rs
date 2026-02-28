@@ -3,8 +3,8 @@ use tokio::sync::{Mutex, broadcast::Sender};
 
 use crate::{
     cip::{
-        cip_class::CipClass,
         cip_identity::{IdentityClass, IdentityInfo},
+        common::object::CipClass,
         registry::Registry,
         tcp_ip_interface::{EIP_RESERVED_PORT, TcpIpInterfaceClass, TcpIpInterfaceInstance},
     },
@@ -128,6 +128,7 @@ impl EipStackBuilder {
 
         let tcp_ip_if_class = Arc::new(TcpIpInterfaceClass::new());
         let tcp_ip_if_instance = Arc::new(TcpIpInterfaceInstance::new(
+            1,
             Arc::downgrade(&(tcp_ip_if_class.clone() as Arc<dyn CipClass>)),
             self.config.local_address,
         ));
