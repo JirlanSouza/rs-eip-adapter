@@ -1,3 +1,9 @@
+[workspace]
+members = [
+    ".",
+    "examples/simple-eip-adapter",
+]
+
 [package]
 name = "rs-eip-adapter"
 version = "0.1.0"
@@ -7,7 +13,9 @@ edition = "2024"
 tokio = { version = "1", features = ["full"] }
 bytes = "1"
 log = "0.4"
-env_logger = "0.10"
 tokio-util = { version = "0.7.18", features = ["codec", "net"] }
 futures-util = { version = "0.3", features = ["sink"] }
 thiserror = "2.0.18"
+
+[dev-dependencies]
+env_logger = "0.10"
