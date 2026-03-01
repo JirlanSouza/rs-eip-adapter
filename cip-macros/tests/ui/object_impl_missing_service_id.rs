@@ -1,20 +1,19 @@
-use cip_macros::object_impl;
+use cip_macros::cip_object_impl;
 
-trait CipObject {
-    fn execute_service(
-        &self,
-        service_id: u8,
-        req: bytes::Bytes,
-        resp: &mut bytes::BytesMut,
-    ) -> Result<(), ()>;
-}
+use crate::cip::{
+    error::CipError,
+    object::{CipObject, CipResult},
+};
+
+#[path = "../cip/mod.rs"]
+mod cip;
 
 struct MyObject;
 
-#[object_impl]
+#[cip_object_impl]
 impl MyObject {
-    #[service]
-    fn my_service(&self, _req: bytes::Bytes, _resp: &mut bytes::BytesMut) -> Result<(), ()> {
+    #[service()]
+    fn my_service(&self, _req: bytes::Bytes, _resp: &mut bytes::BytesMut) -> CipResult {
         Ok(())
     }
 }

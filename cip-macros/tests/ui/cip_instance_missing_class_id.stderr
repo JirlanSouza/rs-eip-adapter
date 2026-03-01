@@ -1,11 +1,11 @@
-error: A struct must have a field 'id: u16' to use #[cip_instance]
-  --> tests/ui/cip_instance_missing_instance_id.rs:13:8
+error: A struct must have a field 'class_id: ClassCode' to use #[cip_instance]
+  --> tests/ui/cip_instance_missing_class_id.rs:13:8
    |
 13 | struct MyInstance {
    |        ^^^^^^^^^^
 
-error[E0615]: attempted to take value of method `id` on type `&MyInstance`
-  --> tests/ui/cip_instance_missing_instance_id.rs:12:1
+error[E0615]: attempted to take value of method `class_id` on type `&MyInstance`
+  --> tests/ui/cip_instance_missing_class_id.rs:12:1
    |
 12 | #[cip_instance]
    | ^^^^^^^^^^^^^^^ method, not a field

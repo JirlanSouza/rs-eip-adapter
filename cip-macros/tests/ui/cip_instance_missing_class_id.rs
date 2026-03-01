@@ -11,7 +11,7 @@ mod cip;
 
 #[cip_instance]
 struct MyInstance {
-    class_id: ClassCode,
+    id: u16,
 }
 
 #[cip_object_impl]

@@ -1,0 +1,16 @@
+error: The field 'class_id' must be of type 'ClassCode'
+  --> tests/ui/cip_instance_wrong_type_class_id.rs:15:15
+   |
+15 |     class_id: u16,
+   |               ^^^
+
+error[E0308]: mismatched types
+  --> tests/ui/cip_instance_wrong_type_class_id.rs:12:1
+   |
+12 | #[cip_instance]
+   | ^^^^^^^^^^^^^^^
+   | |
+   | expected `ClassCode`, found `u16`
+   | expected `ClassCode` because of return type
+   |
+   = note: this error originates in the attribute macro `cip_instance` (in Nightly builds, run with -Z macro-backtrace for more info)

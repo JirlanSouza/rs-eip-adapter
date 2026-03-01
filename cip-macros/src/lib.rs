@@ -53,7 +53,7 @@ pub fn attribute(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// ### Example
 /// ```rust
-/// #[object_impl]
+/// #[cip_object_impl]
 /// impl MyObject {
 ///
 ///     #[service(0x01)]
@@ -63,7 +63,7 @@ pub fn attribute(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn cip_object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemImpl);
     let struct_name = &input.self_ty;
     let mut service_arms = Vec::new();
@@ -92,7 +92,7 @@ pub fn object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
                             errors.push(
                                 syn::Error::new(
                                     attr.span(),
-                                    "The #[service] attribute expects an ID. Ex: #[service(0x0E)]",
+                                    "The #[service] attribute expects an ID of u8 (0-255) type. Ex: #[service(0x0E)]",
                                 )
                                 .to_compile_error(),
                             );
@@ -156,11 +156,11 @@ struct ClassArgs {
 /// Implementation of CipClass trait for the struct.
 /// ```rust
 /// impl CipClass for IdentityClass {
-///     fn class_id(&self) -> u16 { ... }
+///     fn id(&self) -> u16 { ... }
 ///
-///     fn class_name(&self) -> &str { ... }
+///     fn name(&self) -> &str { ... }
 ///
-///     fn instance(&self, instance_id: u16) -> Result<Arc<dyn CipInstance>, CipError> {
+///     fn get_instance(&self, instance_id: u16) -> Result<Arc<dyn CipInstance>, CipError> {
 ///         ...
 ///     }
 ///
@@ -181,11 +181,11 @@ struct ClassArgs {
 /// Implementation of CipClass trait for the struct.
 /// ```rust
 /// impl CipClass for TcpIpInterfaceClass {
-///     fn class_id(&self) -> u16 { ... }
+///     fn id(&self) -> u16 { ... }
 ///
-///     fn class_name(&self) -> &str { ... }
+///     fn name(&self) -> &str { ... }
 ///
-///     fn instance(&self, instance_id: u16) -> Result<Arc<dyn CipInstance>, CipError> {
+///     fn get_instance(&self, instance_id: u16) -> Result<Arc<dyn CipInstance>, CipError> {
 ///         ...
 ///     }
 ///
@@ -216,9 +216,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(e) => return TokenStream::from(e.write_errors()),
     };
     let is_singleton = args.singleton;
-    let class_id_path = args.id;
+    let id_path = args.id;
     let class_name = args.name;
-
     if let Fields::Named(ref mut fields) = input.fields {
         if is_singleton {
             fields.named.push(
@@ -235,7 +234,16 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let new_impl = if !is_singleton {
+    let new_impl = if is_singleton {
+        quote! {
+        impl #name {
+            pub fn new(instance: std::sync::Arc<dyn CipInstance>) -> Self {
+                let instance = std::sync::RwLock::new(instance);
+                Self { instance }
+            }
+        }
+        }
+    } else {
         quote! {
             impl #name {
                 pub fn new() -> Self {
@@ -244,13 +252,11 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
-    } else {
-        quote! {}
     };
 
     let instance_impl = if is_singleton {
         quote! {
-            fn instance(&self, instance_id: u16) -> Result<std::sync::Arc<dyn CipInstance>, CipError> {
+            fn get_instance(&self, instance_id: u16) -> Result<std::sync::Arc<dyn CipInstance>, CipError> {
                 if instance_id != 1 {
                     return Err(CipError::ObjectDoesNotExist);
                 }
@@ -266,7 +272,7 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            fn instance(&self, instance_id: u16) -> Result<std::sync::Arc<dyn CipInstance>, CipError> {
+            fn get_instance(&self, instance_id: u16) -> Result<std::sync::Arc<dyn CipInstance>, CipError> {
                 self.instances
                     .read()
                     .map_err(|_| {
@@ -293,13 +299,17 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! {
             fn add_instance(&self, instance: std::sync::Arc<dyn CipInstance>) -> Result<(), CipError> {
+                if instance.class_id() != self.id() {
+                    return Err(CipError::InvalidParameter);
+                }
+
                 self.instances
                     .write()
                     .map_err(|_| {
                         log::error!("Failed to get write guard for TcpIpInterface instances vector");
                         CipError::GeneralError
                     })?
-                    .insert(instance.instance_id(), instance);
+                    .insert(instance.id(), instance);
 
                 Ok(())
             }
@@ -313,12 +323,11 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl CipClass for #name {
 
-            fn class_id(&self) -> u16 {
-                let code: crate::cip::ClassCode = #class_id_path;
-                u16::from(code)
+            fn id(&self) -> crate::cip::ClassCode {
+                #id_path
             }
 
-            fn class_name(&self) -> &'static str { #class_name }
+            fn name(&self) -> &'static str { #class_name }
 
             #instance_impl
 
@@ -335,8 +344,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```rust
 /// #[cip_instance]
 /// struct MyInstance {
-///     instance_id: u16,
-///     class_code: ClassCode,
+///     id: u16,
+///     class_id: ClassCode,
 ///     ... // Attributes
 /// }
 /// ```
@@ -346,36 +355,33 @@ pub fn cip_instance(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_name = &input.ident;
     let mut compile_errors = Vec::new();
 
-    let mut has_instance_id = false;
-    let mut has_class_code = false;
+    let mut has_id = false;
+    let mut has_class_id = false;
 
     if let Fields::Named(ref fields) = input.fields {
         for field in &fields.named {
             let field_ident = field.ident.as_ref().unwrap();
             let field_type = &field.ty;
 
-            if field_ident == "instance_id" {
-                has_instance_id = true;
+            if field_ident == "id" {
+                has_id = true;
                 let type_str = quote!(#field_type).to_string();
                 if type_str != "u16" {
                     compile_errors.push(
-                        syn::Error::new(
-                            field_type.span(),
-                            "The field 'instance_id' must be of type 'u16'",
-                        )
-                        .to_compile_error(),
+                        syn::Error::new(field_type.span(), "The field 'id' must be of type 'u16'")
+                            .to_compile_error(),
                     );
                 }
             }
 
-            if field_ident == "class_code" {
-                has_class_code = true;
+            if field_ident == "class_id" {
+                has_class_id = true;
                 let type_str = quote!(#field_type).to_string();
                 if !type_str.contains("ClassCode") {
                     compile_errors.push(
                         syn::Error::new(
                             field_type.span(),
-                            "The field 'class_code' must be of type 'ClassCode'",
+                            "The field 'class_id' must be of type 'ClassCode'",
                         )
                         .to_compile_error(),
                     );
@@ -384,20 +390,20 @@ pub fn cip_instance(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    if !has_instance_id {
+    if !has_id {
         compile_errors.push(
             syn::Error::new(
                 struct_name.span(),
-                "A struct must have a field 'instance_id: u16' to use #[cip_instance]",
+                "A struct must have a field 'id: u16' to use #[cip_instance]",
             )
             .to_compile_error(),
         );
     }
-    if !has_class_code {
+    if !has_class_id {
         compile_errors.push(
             syn::Error::new(
                 struct_name.span(),
-                "A struct must have a field 'class_code: ClassCode' to use #[cip_instance]",
+                "A struct must have a field 'class_id: ClassCode' to use #[cip_instance]",
             )
             .to_compile_error(),
         );
@@ -409,12 +415,12 @@ pub fn cip_instance(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #input
 
         impl CipInstance for #struct_name {
-            fn instance_id(&self) -> u16 {
-                self.instance_id
+            fn id(&self) -> u16 {
+                self.id
             }
 
-            fn class_code(&self) -> ClassCode {
-                self.class_code
+            fn class_id(&self) -> ClassCode {
+                self.class_id
             }
 
             fn as_any_arc(self: std::sync::Arc<Self>) -> std::sync::Arc<dyn std::any::Any + Send + Sync> {
