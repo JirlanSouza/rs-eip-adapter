@@ -29,11 +29,11 @@ impl ListIdentityHandler {
         log::info!("Handle ListIdentity request: {:?}", req_header);
         let identity = self
             .registry
-            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
             .map_err(HandlerError::from)?;
         let tcp_ip_if = self
             .registry
-            .get_instance::<TcpIpInterfaceInstance>(ClassCode::TcpIpInterfaceClassId, 1)
+            .get_instance::<TcpIpInterfaceInstance>(ClassCode::TcpIpInterface, 1)
             .map_err(HandlerError::from)?;
         log::debug!("List identiry with TCP/IP Interface: {:?}", tcp_ip_if);
         log::debug!("List identity with Identity: {:?}", identity);

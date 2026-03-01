@@ -122,16 +122,13 @@ impl EipStackBuilder {
     pub async fn build(mut self) -> io::Result<EipStack> {
         log::info!("Building EIP Stack");
         log::debug!("Building EIP Stack with configuration: {:?}", self.config);
-        let identity_class = IdentityClass::new(&self.config.identity);
+        let identity_class = IdentityClass::with_default_instance(&self.config.identity);
         self.registry.register(identity_class);
         log::info!("Registering Identity Class");
 
         let tcp_ip_if_class = Arc::new(TcpIpInterfaceClass::new());
-        let tcp_ip_if_instance = Arc::new(TcpIpInterfaceInstance::new(
-            1,
-            Arc::downgrade(&(tcp_ip_if_class.clone() as Arc<dyn CipClass>)),
-            self.config.local_address,
-        ));
+        let tcp_ip_if_instance =
+            Arc::new(TcpIpInterfaceInstance::new(1, self.config.local_address));
         log::info!("Registering TCP/IP Interface instance");
 
         tcp_ip_if_class

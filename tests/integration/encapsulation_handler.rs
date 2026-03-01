@@ -35,14 +35,10 @@ fn build_handler() -> EncapsulationHandler {
         serial_number: 1234,
         product_name: "Integration Test Device",
     };
-    registry_instance.register(IdentityClass::new(&identity_data));
+    registry_instance.register(IdentityClass::with_default_instance(&identity_data));
 
     let tcp_interface_class = Arc::new(TcpIpInterfaceClass::new());
-    let tcp_interface_instance = Arc::new(TcpIpInterfaceInstance::new(
-        1,
-        Arc::downgrade(&(tcp_interface_class.clone() as Arc<dyn CipClass>)),
-        Ipv4Addr::LOCALHOST,
-    ));
+    let tcp_interface_instance = Arc::new(TcpIpInterfaceInstance::new(1, Ipv4Addr::LOCALHOST));
     tcp_interface_class
         .add_instance(tcp_interface_instance)
         .expect("register tcp instance");

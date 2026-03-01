@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    ".",
+    ".", "cip-macros",
     "examples/simple-eip-adapter",
 ]
 
@@ -16,6 +16,7 @@ log = "0.4"
 tokio-util = { version = "0.7.18", features = ["codec", "net"] }
 futures-util = { version = "0.3", features = ["sink"] }
 thiserror = "2.0.18"
+cip-macros = { path = "cip-macros" }
 
 [dev-dependencies]
 env_logger = "0.10"

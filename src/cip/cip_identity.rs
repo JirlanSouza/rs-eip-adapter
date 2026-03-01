@@ -1,9 +1,7 @@
-use std::{
-    any::Any,
-    sync::{Arc, RwLock, Weak},
-};
+use std::sync::{Arc, RwLock};
 
 use bytes::BufMut;
+use cip_macros::{cip_class, cip_instance, cip_object_impl};
 
 use super::{
     ClassCode,
@@ -99,63 +97,36 @@ impl From<DeviceState> for u8 {
     }
 }
 
-pub struct IdentityClass {
-    instance: RwLock<Arc<IdentityInstance>>,
+#[derive(Debug)]
+pub enum Test {
+    Id = 0x01,
 }
 
-impl IdentityClass {
-    pub fn new(info: &IdentityInfo) -> Arc<Self> {
-        Arc::new_cyclic(|class_weak| {
-            let inst = IdentityInstance::new(class_weak.clone() as Weak<dyn CipClass>, info);
+impl From<Test> for u16 {
+    fn from(test: Test) -> Self {
+        test as u16
+    }
+}
 
-            Self {
-                instance: RwLock::new(Arc::new(inst)),
-            }
+#[cip_class(id = ClassCode::Identity, name = "Identity", singleton = true)]
+pub struct IdentityClass {}
+
+#[cip_object_impl]
+impl IdentityClass {
+    pub fn with_default_instance(info: &IdentityInfo) -> Arc<Self> {
+        let instance = Arc::new(IdentityInstance::new(info));
+
+        Arc::new(Self {
+            instance: RwLock::new(instance),
         })
     }
 }
 
-impl CipObject for IdentityClass {
-    fn execute_service(
-        &self,
-        _service_id: u8,
-        _req: bytes::Bytes,
-        _resp: &mut bytes::BytesMut,
-    ) -> CipResult {
-        Err(CipError::ServiceNotSupported)
-    }
-}
-
-impl CipClass for IdentityClass {
-    fn class_id(&self) -> u16 {
-        ClassCode::IdentityClassId.into()
-    }
-
-    fn class_name(&self) -> &'static str {
-        "Identity"
-    }
-    fn instance(&self, instance_id: u16) -> Result<Arc<dyn CipInstance>, CipError> {
-        if instance_id != 1 {
-            return Err(CipError::ObjectDoesNotExist);
-        }
-
-        let read_guard = self.instance.read().map_err(|_| {
-            log::error!("Failed to get read guard for IdentityClass instance");
-            CipError::GeneralError
-        })?;
-
-        let inst = Arc::clone(&read_guard);
-        Ok(inst as Arc<dyn CipInstance>)
-    }
-
-    fn add_instance(&self, _instance: Arc<dyn CipInstance>) -> Result<(), CipError> {
-        Err(CipError::ObjectStateConflict)
-    }
-}
-
+#[cip_instance]
 #[derive(Debug)]
 pub struct IdentityInstance {
-    class: Weak<dyn CipClass>,
+    id: u16,
+    class_id: ClassCode,
     pub vendor_id: u16,
     pub device_type: u16,
     pub product_code: u16,
@@ -166,12 +137,14 @@ pub struct IdentityInstance {
     pub state: DeviceState,
 }
 
+#[cip_object_impl]
 impl IdentityInstance {
     const BASE_ATTRIBUTES_LEN: usize = 15;
 
-    pub fn new(class: Weak<dyn CipClass>, info: &IdentityInfo) -> Self {
+    pub fn new(info: &IdentityInfo) -> Self {
         Self {
-            class,
+            id: 1,
+            class_id: ClassCode::Identity,
             vendor_id: info.vendor_id,
             device_type: info.device_type,
             product_code: info.product_code,
@@ -186,37 +159,10 @@ impl IdentityInstance {
         }
     }
 
+    #[service(0x01)]
     pub fn get_attribute_all(&self, _req: bytes::Bytes, resp: &mut bytes::BytesMut) -> CipResult {
         self.encode(resp)?;
         Ok(())
-    }
-}
-
-impl CipInstance for IdentityInstance {
-    fn instance_id(&self) -> u16 {
-        1
-    }
-
-    fn class(&self) -> Weak<dyn CipClass> {
-        self.class.clone()
-    }
-
-    fn as_any_arc(self: Arc<Self>) -> Arc<dyn Any + Send + Sync> {
-        self
-    }
-}
-
-impl CipObject for IdentityInstance {
-    fn execute_service(
-        &self,
-        service_id: u8,
-        req: bytes::Bytes,
-        resp: &mut bytes::BytesMut,
-    ) -> CipResult {
-        match service_id {
-            1 => self.get_attribute_all(req, resp),
-            _ => Err(CipError::ServiceNotSupported),
-        }
     }
 }
 

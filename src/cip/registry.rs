@@ -15,7 +15,7 @@ impl Registry {
     }
 
     pub fn register(&mut self, class: Arc<dyn CipClass>) {
-        self.classes.insert(class.class_id(), class);
+        self.classes.insert(class.id().into(), class);
     }
 
     pub fn get(&self, class_id: u16) -> Option<Arc<dyn CipClass>> {
@@ -37,7 +37,7 @@ impl Registry {
             .get(class_id.into())
             .ok_or(format!("Class {} not found", class_id))?;
         let instance_ptr = class
-            .instance(instance_id)
+            .get_instance(instance_id)
             .map_err(|_| format!("Instance {} for class {} not found", instance_id, class_id))?;
 
         let any_arc = instance_ptr.as_any_arc();
@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn register_and_get_class_by_id() {
         let mut registry = Registry::new();
-        let identity_class_id = ClassCode::IdentityClassId.into();
+        let identity_class_id = ClassCode::Identity;
         let identity_info = IdentityInfo {
             vendor_id: 0x1111,
             device_type: 0x2222,
@@ -68,15 +68,15 @@ mod tests {
             serial_number: 0xDEAD_BEEF,
             product_name: "DeviceA",
         };
-        let identity_class = IdentityClass::new(&identity_info);
+        let identity_class = IdentityClass::with_default_instance(&identity_info);
         registry.register(identity_class.clone());
 
         let retrieved_class = registry
-            .get(identity_class_id)
+            .get(identity_class_id.into())
             .expect("class should be present");
 
-        assert_eq!(retrieved_class.class_id(), identity_class_id);
-        assert_eq!(retrieved_class.class_name(), "Identity");
+        assert_eq!(retrieved_class.id(), identity_class_id);
+        assert_eq!(retrieved_class.name(), "Identity");
     }
 
     #[test]
@@ -91,11 +91,11 @@ mod tests {
             serial_number: 0xDEADBEEF,
             product_name: "TestDevice",
         };
-        let identity_class = IdentityClass::new(&identity_info);
+        let identity_class = IdentityClass::with_default_instance(&identity_info);
         registry.register(identity_class.clone());
 
         let identity_instance = registry
-            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
             .expect("expected identity instance");
 
         assert_eq!(identity_instance.vendor_id, identity_info.vendor_id);
@@ -110,7 +110,7 @@ mod tests {
         let registry = Registry::new();
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
             .unwrap_err();
 
         assert!(error_message.contains("not found"));
@@ -128,11 +128,11 @@ mod tests {
             serial_number: 0,
             product_name: "X",
         };
-        let identity_class = IdentityClass::new(&identity_info);
+        let identity_class = IdentityClass::with_default_instance(&identity_info);
         registry.register(identity_class.clone());
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(ClassCode::IdentityClassId, 2)
+            .get_instance::<IdentityInstance>(ClassCode::Identity, 2)
             .unwrap_err();
 
         assert!(error_message.contains("Instance"));
@@ -142,16 +142,12 @@ mod tests {
     fn get_instance_downcast_failure_returns_error() {
         let mut registry = Registry::new();
         let tcp_class = Arc::new(TcpIpInterfaceClass::new());
-        let tcp_instance = Arc::new(TcpIpInterfaceInstance::new(
-            1,
-            Arc::downgrade(&(tcp_class.clone() as Arc<dyn CipClass>)),
-            Ipv4Addr::LOCALHOST,
-        ));
+        let tcp_instance = Arc::new(TcpIpInterfaceInstance::new(1, Ipv4Addr::LOCALHOST));
         tcp_class.add_instance(tcp_instance).unwrap();
         registry.register(tcp_class.clone());
 
         let error_message = registry
-            .get_instance::<IdentityInstance>(ClassCode::TcpIpInterfaceClassId, 1)
+            .get_instance::<IdentityInstance>(ClassCode::TcpIpInterface, 1)
             .unwrap_err();
 
         assert!(error_message.contains("downcast"));
