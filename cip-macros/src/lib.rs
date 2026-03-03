@@ -23,11 +23,10 @@ pub fn attribute(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
-#[derive(Debug, FromMeta)]
+#[derive(Debug, FromMeta, PartialEq)]
 enum AttributeAccess {
     Get,
     Set,
-    GetSet,
 }
 
 #[derive(Debug, FromField)]
@@ -77,12 +76,15 @@ fn attributes_match(item: &mut ItemStruct) -> TokenStream2 {
                             self.#field_ident.encode(resp)?;
                             Ok(())
                         }});
-                        set_arms.push(quote! {
-                            #attr_id => {
-                                self.#field_ident = FromBytes::decode(req)?;
-                                Ok(())
-                            }
-                        });
+
+                        if args.access == Some(AttributeAccess::Set) {
+                            set_arms.push(quote! {
+                                #attr_id => {
+                                    self.#field_ident = FromBytes::decode(req)?;
+                                    Ok(())
+                                }
+                            });
+                        }
                     } else {
                         errors.push(
                             syn::Error::new(
