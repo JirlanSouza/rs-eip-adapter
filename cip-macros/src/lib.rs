@@ -1,5 +1,8 @@
-use darling::{FromMeta, ast::NestedMeta};
+use std::collections::HashSet;
+
+use darling::{FromField, FromMeta, ast::NestedMeta};
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
     Fields, ImplItem, ItemImpl, ItemStruct, LitInt, Meta, Path, Token, parse::Parser,
@@ -17,36 +20,120 @@ use syn::{
 /// ```
 #[proc_macro_attribute]
 pub fn attribute(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as ItemStruct);
-    let name = &input.ident;
+    item
+}
 
+#[derive(Debug, FromMeta)]
+enum AttributeAccess {
+    Get,
+    Set,
+    GetSet,
+}
+
+#[derive(Debug, FromField)]
+#[darling(attributes(attribute))]
+struct CipAttributeArgs {
+    pub id: Option<u16>,
+    pub name: Option<String>,
+    #[darling(default)]
+    pub access: Option<AttributeAccess>,
+}
+
+fn attributes_match(item: &mut ItemStruct) -> TokenStream2 {
     let mut get_arms = Vec::new();
+    let mut set_arms = Vec::new();
+    let mut errors = Vec::new();
 
-    if let Fields::Named(ref fields) = input.fields {
-        for field in &fields.named {
-            if let Some(attr) = field.attrs.iter().find(|a| a.path().is_ident("id")) {
-                let id = attr.parse_args::<LitInt>().expect("id must be an integer");
-                let field_name = &field.ident;
-                get_arms.push(quote! {
-                    #id => self.#field_name.encode(resp).map_err(|_| CipError::ResourceUnavailable)?,
-                });
+    let mut ids = HashSet::<u16>::new();
+
+    if let Fields::Named(ref mut fields) = item.fields {
+        for field in &mut fields.named {
+            let has_attribute = field
+                .attrs
+                .iter()
+                .any(|attr| attr.path().is_ident("attribute"));
+
+            if !has_attribute {
+                continue;
             }
+
+            match CipAttributeArgs::from_field(field) {
+                Ok(args) => {
+                    let field_ident = &field.ident;
+                    if let Some(attr_id) = args.id {
+                        if ids.contains(&attr_id) {
+                            errors.push(
+                                syn::Error::new(
+                                    field.span(),
+                                    format!("Duplicate attribute ID: {}", attr_id),
+                                )
+                                .to_compile_error(),
+                            );
+                        }
+
+                        ids.insert(attr_id);
+                        get_arms.push(quote! {
+                            #attr_id => {
+                            self.#field_ident.encode(resp)?;
+                            Ok(())
+                        }});
+                        set_arms.push(quote! {
+                            #attr_id => {
+                                self.#field_ident = FromBytes::decode(req)?;
+                                Ok(())
+                            }
+                        });
+                    } else {
+                        errors.push(
+                            syn::Error::new(
+                                field.span(),
+                                "The #[attribute] attribute expects an ID of u16 (0-65535) type. Ex: #[attribute(id = 0x0E)]",
+                            )
+                            .to_compile_error(),
+                        );
+                    }
+                }
+                Err(e) => {
+                    errors.push(e.write_errors());
+                }
+            }
+
+            field
+                .attrs
+                .retain(|attr| !attr.path().is_ident("attribute"));
         }
     }
 
     let expanded = quote! {
-        #input
-        impl #name {
-            pub fn handle_get_attribute_single(&self, attr_id: u16, resp: &mut bytes::BytesMut) -> CipResult {
-                match attr_id {
-                    #( #get_arms )*
-                    _ => return Err(CipError::AttributeNotSupported),
+
+        #( #errors )*
+
+        pub fn execute_attribute_service(&mut self,
+                service_id: u8,
+                req: &mut bytes::Bytes,
+                resp: &mut bytes::BytesMut
+            ) -> CipResult {
+            match service_id {
+                0x0E => {
+                    let attr_id = req.get_u16_le();
+                    match attr_id {
+                        #( #get_arms )*
+                        _ => Err(CipError::AttributeNotSupported),
+                    }
                 }
-                Ok(())
+                0x10 => {
+                    let attr_id = req.get_u16_le();
+                    match attr_id {
+                        #( #set_arms )*
+                        _ => Err(CipError::AttributeNotSupported),
+                    }
+                }
+                _ => Err(CipError::ServiceNotSupported),
             }
         }
     };
-    TokenStream::from(expanded)
+
+    TokenStream2::from(expanded)
 }
 
 /// Implement a CIP object and allow use #[service(0x01)] to define a service.
@@ -119,14 +206,14 @@ pub fn cip_object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
         impl CipObject for #struct_name {
             fn execute_service(
-                &self,
+                &mut self,
                 service_id: u8,
-                req: bytes::Bytes,
+                req: &mut bytes::Bytes,
                 resp: &mut bytes::BytesMut
             ) -> CipResult {
                 match service_id {
                     #( #service_arms )*
-                    _ => Err(CipError::ServiceNotSupported),
+                    _ => self.execute_attribute_service(service_id, req, resp),
                 }
             }
         }
@@ -198,7 +285,7 @@ struct ClassArgs {
 #[proc_macro_attribute]
 pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemStruct);
-    let name = &input.ident;
+    let name = input.ident.clone();
 
     let attr_parser = Punctuated::<Meta, Token![,]>::parse_terminated;
     let meta_list = match attr_parser.parse(attr) {
@@ -215,9 +302,11 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(v) => v,
         Err(e) => return TokenStream::from(e.write_errors()),
     };
+
     let is_singleton = args.singleton;
     let id_path = args.id;
     let class_name = args.name;
+
     if let Fields::Named(ref mut fields) = input.fields {
         if is_singleton {
             fields.named.push(
@@ -234,6 +323,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
+    let attribute_services = attributes_match(&mut input);
+
     let new_impl = if is_singleton {
         quote! {
         impl #name {
@@ -241,6 +332,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let instance = std::sync::RwLock::new(instance);
                 Self { instance }
             }
+
+            #attribute_services
         }
         }
     } else {
@@ -250,6 +343,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let instances = std::sync::RwLock::new(std::collections::HashMap::new());
                     Self { instances }
                 }
+
+                #attribute_services
             }
         }
     };
@@ -351,8 +446,8 @@ pub fn cip_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn cip_instance(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as ItemStruct);
-    let struct_name = &input.ident;
+    let mut input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident.clone();
     let mut compile_errors = Vec::new();
 
     let mut has_id = false;
@@ -409,10 +504,16 @@ pub fn cip_instance(_attr: TokenStream, item: TokenStream) -> TokenStream {
         );
     }
 
+    let attribute_services = attributes_match(&mut input);
+
     let expanded = quote! {
         #( #compile_errors )*
 
         #input
+
+        impl #struct_name {
+            #attribute_services
+        }
 
         impl CipInstance for #struct_name {
             fn id(&self) -> u16 {
