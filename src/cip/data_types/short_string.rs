@@ -28,6 +28,15 @@ impl ShortString {
         Self(storage)
     }
 
+    pub fn from_bytes(value: &[u8]) -> Self {
+        let mut storage = [0u8; Self::BYTES_LEN];
+        let len = usize::min(value.len(), Self::MAX_LEN);
+
+        storage[0] = len as u8;
+        storage[1..len + 1].copy_from_slice(&value[..len]);
+        Self(storage)
+    }
+
     pub fn len(&self) -> usize {
         self.0[0] as usize
     }
