@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use bytes::{Buf, BufMut};
 
 use crate::{
@@ -23,9 +25,21 @@ pub struct PortSegment {
     pub link_address: LinkAddress,
 }
 
+impl PortSegment {
+    pub const MIN_LEN: usize = 2;
+
+    pub fn from_port_and_ip(port: u8, ip: Ipv4Addr) -> Self {
+        let link_address = LinkAddress::Extended(ShortString::new(ip.to_string().as_str()));
+        Self {
+            port: PortIdentifier::Default(port),
+            link_address,
+        }
+    }
+}
+
 impl FromBytes for PortSegment {
     fn decode<T: bytes::Buf>(buffer: &mut T) -> Result<Self, BinaryError> {
-        let mut total_len = 2;
+        let mut total_len = Self::MIN_LEN;
 
         if buffer.remaining() < total_len {
             return Err(BinaryError::Truncated {
