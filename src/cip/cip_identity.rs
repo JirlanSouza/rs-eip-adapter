@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use bytes::BufMut;
+use bytes::{Buf, BufMut};
 use cip_macros::{cip_class, cip_instance, cip_object_impl};
 
 use super::{
@@ -160,7 +160,11 @@ impl IdentityInstance {
     }
 
     #[service(0x01)]
-    pub fn get_attribute_all(&self, _req: bytes::Bytes, resp: &mut bytes::BytesMut) -> CipResult {
+    pub fn get_attribute_all(
+        &self,
+        _req: &mut bytes::Bytes,
+        resp: &mut bytes::BytesMut,
+    ) -> CipResult {
         self.encode(resp)?;
         Ok(())
     }

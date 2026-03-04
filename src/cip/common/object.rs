@@ -7,8 +7,19 @@ use crate::cip::ClassCode;
 
 pub type CipResult = Result<(), CipError>;
 
+pub enum AttributeAccess {
+    Get,
+    Set,
+    GetSet,
+}
+
 pub trait CipObject: Send + Sync {
-    fn execute_service(&self, service_id: u8, req: Bytes, resp: &mut BytesMut) -> CipResult;
+    fn execute_service(
+        &mut self,
+        service_id: u8,
+        req: &mut Bytes,
+        resp: &mut BytesMut,
+    ) -> CipResult;
 }
 
 pub trait CipClass: CipObject {
