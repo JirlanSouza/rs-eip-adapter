@@ -101,9 +101,9 @@ pub struct InterfaceConfiguration {
 }
 
 impl InterfaceConfiguration {
-    pub fn new() -> Self {
+    pub fn new(ip_address: Ipv4Addr) -> Self {
         Self {
-            ip_address: UDInt::new(0),
+            ip_address: UDInt::new(u32::from_be_bytes(ip_address.octets())),
             network_mask: UDInt::new(0),
             gateway_address: UDInt::new(0),
             name_server: UDInt::new(0),
@@ -194,11 +194,11 @@ impl TcpIpInterfaceInstance {
         Self {
             id,
             class_id: ClassCode::TcpIpInterface,
-            status: DWord::new(0),
+            status: DWord::new(1),
             configuration_capability: DWord::new(0),
             configuration_control: DWord::new(0),
             phisical_link_object: physical_link,
-            interface_configuration: InterfaceConfiguration::new(),
+            interface_configuration: InterfaceConfiguration::new(address),
             host_name: CipString::new(""),
         }
     }
