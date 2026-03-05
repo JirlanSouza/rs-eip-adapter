@@ -216,138 +216,241 @@ impl ToBytes for PortSegment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytes::BytesMut;
-
-    // Segment Type = Port Segment. Port Number = 2, Link Address = 6
-    const DEFAULT_PORT_DEFAULT_LINK_BYTES: [u8; 2] = [0x02, 0x06];
+    use bytes::{Bytes, BytesMut};
 
     #[test]
-    fn decode_default_port_default_link() {
-        let mut data = bytes::Bytes::from(DEFAULT_PORT_DEFAULT_LINK_BYTES.as_slice());
-        let segment =
-            PortSegment::decode(&mut data).expect("Failed to decode default port default link");
+    fn decode_and_encode_default_port_default_link_symmetry() {
+        let raw_bytes: [u8; 2] = [
+            0x02, // Segment Type 0x00 | Port 2
+            0x06, // Link Address 6
+        ];
 
-        assert_eq!(segment.port, PortIdentifier::Default(2));
-        assert_eq!(segment.link_address, LinkAddress::Default(6));
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode");
+
+        assert_eq!(decoded.port, PortIdentifier::Default(2));
+        assert_eq!(decoded.link_address, LinkAddress::Default(6));
+
+        // Round-trip Symmetry
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).expect("Failed to encode");
+        assert_eq!(
+            buffer.as_ref(),
+            &raw_bytes,
+            "Inconsistent encode/decode symmetry"
+        );
     }
 
     #[test]
-    fn encode_default_port_default_link() {
+    fn decode_and_encode_extended_port_default_link_symmetry() {
+        let raw_bytes: [u8; 4] = [
+            0x0F, // Segment Type 0x00 | Port Extended (15)
+            0x12, 0x00, // Port 18 (LE)
+            0x01, // Link Address 1
+        ];
+
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode");
+
+        assert_eq!(decoded.port, PortIdentifier::Extended(18));
+        assert_eq!(decoded.link_address, LinkAddress::Default(1));
+
+        // Round-trip Symmetry
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).expect("Failed to encode");
+        assert_eq!(
+            buffer.as_ref(),
+            &raw_bytes,
+            "Inconsistent encode/decode symmetry"
+        );
+    }
+
+    #[test]
+    fn decode_and_encode_default_port_extended_link_address_padded_symmetry() {
+        let raw_bytes: [u8; 18] = [
+            0x15, // Segment Type 0x00 | Ext Link (bit 4) | Port 5
+            0x0F, // Link Address Size (15)
+            0x31, 0x33, 0x30, 0x2E, 0x31, 0x35, 0x31, 0x2E, 0x31, 0x33, 0x37, 0x2E, 0x31,
+            0x30, // 130.151.137.105 (IP Address)
+            0x35, 0x00, // Pad byte
+        ];
+
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode");
+
+        assert_eq!(decoded.port, PortIdentifier::Default(5));
+        let expected_short_string = ShortString::new("130.151.137.105");
+        assert_eq!(
+            decoded.link_address,
+            LinkAddress::Extended(expected_short_string)
+        );
+
+        // Round-trip Symmetry
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).expect("Failed to encode");
+        assert_eq!(
+            buffer.as_ref(),
+            &raw_bytes,
+            "Inconsistent encode/decode symmetry"
+        );
+    }
+
+    #[test]
+    fn decode_and_encode_extended_port_extended_link_address_padded_symmetry() {
+        let raw_bytes: [u8; 20] = [
+            0x1F, // Segment Type 0x00 | Ext Link (bit 4) | Port Extended (15)
+            0x0F, // Link Address Size (15)
+            0x12, 0x00, // Port 18 (LE)
+            0x31, 0x33, 0x30, 0x2E, 0x31, 0x35, 0x31, 0x2E, 0x31, 0x33, 0x37, 0x2E, 0x31,
+            0x30, // 130.151.137.105 (IP Address).
+            0x35, 0x00, // Pad byte
+        ];
+
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode");
+
+        assert_eq!(decoded.port, PortIdentifier::Extended(18));
+        let expected_short_string = ShortString::new("130.151.137.105");
+        assert_eq!(
+            decoded.link_address,
+            LinkAddress::Extended(expected_short_string)
+        );
+
+        // Round-trip Symmetry
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).expect("Failed to encode");
+        assert_eq!(
+            buffer.as_ref(),
+            &raw_bytes,
+            "Inconsistent encode/decode symmetry"
+        );
+    }
+
+    #[test]
+    fn decode_truncated_buffer_returns_error() {
+        // Port segment with extended port but missing port data
+        let shorter_bytes = [0x0F];
+        let mut cursor = Bytes::copy_from_slice(&shorter_bytes);
+        let result = PortSegment::decode(&mut cursor);
+        assert!(matches!(result, Err(BinaryError::Truncated { .. })));
+    }
+
+    #[test]
+    fn encode_buffer_too_small_returns_error() {
         let segment = PortSegment {
             port: PortIdentifier::Default(2),
             link_address: LinkAddress::Default(6),
         };
-
-        let mut buffer = BytesMut::with_capacity(segment.encoded_len());
-        segment.encode(&mut buffer).unwrap();
-
-        assert_eq!(buffer.as_ref(), &DEFAULT_PORT_DEFAULT_LINK_BYTES);
-    }
-
-    // Segment Type = Port Segment. Port Identifier is 15 indicating the Port Number is
-    // specified in the next 16 bit field [12][00] (18 decimal). Link Address = 1.
-    const EXTENDED_PORT_DEFAULT_LINK_BYTES: [u8; 4] = [0x0F, 0x12, 0x00, 0x01];
-
-    #[test]
-    fn decode_extended_port_default_link() {
-        let mut data = bytes::Bytes::from(EXTENDED_PORT_DEFAULT_LINK_BYTES.as_slice());
-        let segment =
-            PortSegment::decode(&mut data).expect("Failed to decode extended port default link");
-
-        assert_eq!(segment.port, PortIdentifier::Extended(18));
-        assert_eq!(segment.link_address, LinkAddress::Default(1));
+        let mut arr = [0u8; 1];
+        let mut buffer = &mut arr[..];
+        let result = segment.encode(&mut buffer);
+        assert!(matches!(result, Err(BinaryError::BufferTooSmall { .. })));
     }
 
     #[test]
-    fn encode_extended_port_default_link() {
-        let segment = PortSegment {
-            port: PortIdentifier::Extended(18),
-            link_address: LinkAddress::Default(1),
-        };
+    fn decode_and_encode_port_14_no_extension_symmetry() {
+        // Port 14 is the maximum value for Default port
+        let raw_bytes: [u8; 2] = [0x0E, 0x01];
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode port 14");
+        assert_eq!(decoded.port, PortIdentifier::Default(14));
 
-        let mut buffer = BytesMut::with_capacity(segment.encoded_len());
-        segment
-            .encode(&mut buffer)
-            .expect("Failed to encode extended port default link");
-
-        assert_eq!(buffer.as_ref(), &EXTENDED_PORT_DEFAULT_LINK_BYTES);
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).unwrap();
+        assert_eq!(buffer.as_ref(), &raw_bytes);
     }
 
-    // Segment Type = Port Segment. Multi-Byte address for TCP Port 5, Link Address
-    // 130.151.137.105 (IP Address). The address is defined as a character array,
-    // length of 15 bytes. The last byte in the segment is a pad byte.
-    const DEFAULT_PORT_EXTENDED_LINK_ADDRESS_BYTES: [u8; 18] = [
-        0x15, 0x0F, 0x31, 0x33, 0x30, 0x2E, 0x31, 0x35, 0x31, 0x2E, 0x31, 0x33, 0x37, 0x2E, 0x31,
-        0x30, 0x35, 0x00,
-    ];
+    #[test]
+    fn decode_invalid_segment_type_returns_error() {
+        // Segment type 0x01 (Logical Segment) instead of 0x00 (Port Segment)
+        let raw_bytes: [u8; 2] = [0x22, 0x06]; // 001 00010
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let result = PortSegment::decode(&mut cursor);
+        assert!(matches!(result, Err(BinaryError::InvalidData { .. })));
+    }
 
     #[test]
-    fn decode_default_port_extended_link_address() {
-        let mut data = bytes::Bytes::from(DEFAULT_PORT_EXTENDED_LINK_ADDRESS_BYTES.as_slice());
-        let segment =
-            PortSegment::decode(&mut data).expect("Failed to decode default port extended link");
+    fn decode_and_encode_extended_link_address_no_padding_symmetry() {
+        // Port 1 (Default), Ext Link len 2.
+        // Total len: 1 (first) + 1 (size) + 2 (data) = 4 bytes (Even). No pad.
+        let raw_bytes: [u8; 4] = [
+            0x11, // Segment 0 | Ext Link | Port 1
+            0x02, // Size 2
+            0x31, 0x32, // "12"
+        ];
 
-        assert_eq!(segment.port, PortIdentifier::Default(5));
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode");
 
-        let expected_short_string = ShortString::new("130.151.137.105");
         assert_eq!(
-            segment.link_address,
-            LinkAddress::Extended(expected_short_string)
+            decoded.link_address,
+            LinkAddress::Extended(ShortString::new("12"))
         );
+
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded.encode(&mut buffer).unwrap();
+        assert_eq!(buffer.as_ref(), &raw_bytes);
     }
 
     #[test]
-    fn encode_default_port_extended_link_address() {
-        let segment = PortSegment {
-            port: PortIdentifier::Default(5),
-            link_address: LinkAddress::Extended(ShortString::new("130.151.137.105")),
-        };
+    fn decode_and_encode_port_min_default_symmetry() {
+        // Port 0 (Min Default)
+        let raw_bytes: [u8; 2] = [0x00, 0x01];
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode port 0");
+        assert_eq!(decoded.port, PortIdentifier::Default(0));
 
-        let mut buffer = BytesMut::with_capacity(segment.encoded_len());
-        segment
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded
             .encode(&mut buffer)
-            .expect("Failed to encode default port extended link address");
-
-        assert_eq!(buffer.as_ref(), &DEFAULT_PORT_EXTENDED_LINK_ADDRESS_BYTES);
-    }
-
-    // Segment Type = Port Segment. Port Identifier is 15 indicating the Port Number is
-    // specified in the next 16 bit field [12][00] (18 decimal) aftter the Link Address
-    // field that value is 15. Link Address = 130.151.137.105 (IP Address). The address
-    // is defined as a character array, length of 15 bytes. The last byte in the segment
-    // is a pad byte.
-    const EXTENDED_PORT_EXTENDED_LINK_ADDRESS_BYTES: [u8; 20] = [
-        0x1F, 0x0F, 0x12, 0x00, 0x31, 0x33, 0x30, 0x2E, 0x31, 0x35, 0x31, 0x2E, 0x31, 0x33, 0x37,
-        0x2E, 0x31, 0x30, 0x35, 0x00,
-    ];
-
-    #[test]
-    fn decode_extended_port_extended_link_address() {
-        let mut data = bytes::Bytes::from(EXTENDED_PORT_EXTENDED_LINK_ADDRESS_BYTES.as_slice());
-        let segment =
-            PortSegment::decode(&mut data).expect("Failed to decode extended port extended link");
-
-        assert_eq!(segment.port, PortIdentifier::Extended(18));
-
-        let expected_short_string = ShortString::new("130.151.137.105");
-        assert_eq!(
-            segment.link_address,
-            LinkAddress::Extended(expected_short_string)
-        );
+            .expect("Failed to encode port 0");
+        assert_eq!(buffer.as_ref(), &raw_bytes);
     }
 
     #[test]
-    fn encode_extended_port_extended_link_address() {
-        let segment = PortSegment {
-            port: PortIdentifier::Extended(18),
-            link_address: LinkAddress::Extended(ShortString::new("130.151.137.105")),
-        };
+    fn decode_and_encode_port_max_extended_symmetry() {
+        // Port 65535 (Max Extended)
+        let raw_bytes: [u8; 4] = [0x0F, 0xFF, 0xFF, 0x01];
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode port 65535");
+        assert_eq!(decoded.port, PortIdentifier::Extended(65535));
 
-        let mut buffer = BytesMut::with_capacity(segment.encoded_len());
-        segment
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded
             .encode(&mut buffer)
-            .expect("Failed to encode extended port extended link address");
+            .expect("Failed to encode port 65535");
+        assert_eq!(buffer.as_ref(), &raw_bytes);
+    }
 
-        assert_eq!(buffer.as_ref(), &EXTENDED_PORT_EXTENDED_LINK_ADDRESS_BYTES);
+    #[test]
+    fn decode_and_encode_link_address_min_default_symmetry() {
+        // Link Address 0 (Min Default)
+        let raw_bytes: [u8; 2] = [0x01, 0x00];
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode link 0");
+        assert_eq!(decoded.link_address, LinkAddress::Default(0));
+
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded
+            .encode(&mut buffer)
+            .expect("Failed to encode link 0");
+        assert_eq!(buffer.as_ref(), &raw_bytes);
+    }
+
+    #[test]
+    fn decode_and_encode_link_address_max_default_symmetry() {
+        // Link Address 255 (Max Default)
+        let raw_bytes: [u8; 2] = [0x01, 0xFF];
+        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
+        let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode link 255");
+        
+        assert_eq!(decoded.link_address, LinkAddress::Default(255));
+
+        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
+        decoded
+            .encode(&mut buffer)
+            .expect("Failed to encode link 255");
+        assert_eq!(buffer.as_ref(), &raw_bytes);
     }
 }
