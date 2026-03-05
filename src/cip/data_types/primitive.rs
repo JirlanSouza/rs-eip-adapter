@@ -127,6 +127,8 @@ mod tests {
 
     impl_cip_primitive!(TestByte, u8);
     impl_cip_primitive!(TestWord, u16);
+    impl_cip_primitive!(TestDWord, u32);
+    impl_cip_primitive!(TestLWord, u64);
 
     #[test]
     fn bit_manipulation_single_bits_behave_correctly() {
@@ -197,45 +199,116 @@ mod tests {
     }
 
     #[test]
+    fn bit_manipulation_32_and_64_bits_behave_correctly() {
+        let mut val32 = TestDWord::new(0); // 00000000 00000000 00000000 00000000
+        val32.set_bit(31); // 10000000 00000000 00000000 00000000
+        assert!(val32.get_bit(31));
+        assert_eq!(val32.value(), 0x8000_0000);
+
+        val32.set_bits(0, 7, 0xFF); // 10000000 00000000 00000000 11111111
+        assert_eq!(val32.get_bits(0, 3), 0x0F);
+        assert_eq!(val32.value(), 0x8000_00FF);
+
+        let mut val64 = TestLWord::new(0); // 64 bits of zeros
+        val64.set_bit(63); // 10000000 ... (63 zeros)
+        assert!(val64.get_bit(63));
+        assert_eq!(val64.value(), 0x8000_0000_0000_0000);
+
+        val64.set_bits(0, 15, 0xFFFF); // 10000000 00000000 ... 11111111 11111111
+        assert_eq!(val64.get_bits(0, 7), 0xFF);
+        assert_eq!(val64.value(), 0x8000_0000_0000_FFFF);
+    }
+
+    #[test]
+    fn bit_manipulation_16_bits_behave_correctly() {
+        let mut val16 = TestWord::new(0); // 00000000 00000000
+        val16.set_bit(15); // 10000000 00000000
+        assert!(val16.get_bit(15));
+        assert_eq!(val16.value(), 0x8000);
+
+        val16.set_bits(0, 7, 0xFF); // 10000000 11111111
+        assert_eq!(val16.get_bits(0, 3), 0x0F);
+        assert_eq!(val16.value(), 0x80FF);
+    }
+
+    #[test]
     fn serialization_symmetry_uint_roundtrip_correctly() {
-        let raw_bytes: [u8; 2] = [0x34, 0x12];
+        // 16-bit
+        let raw_bytes16: [u8; 2] = [0x34, 0x12];
+        let mut cursor16 = Bytes::copy_from_slice(&raw_bytes16);
+        let decoded16 = TestWord::decode(&mut cursor16).expect("Failed to decode u16");
+        assert_eq!(decoded16.value(), 0x1234);
+        let mut buffer16 = BytesMut::with_capacity(decoded16.encoded_len());
+        decoded16
+            .encode(&mut buffer16)
+            .expect("Failed to encode u16");
+        assert_eq!(buffer16.as_ref(), &raw_bytes16);
 
-        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
-        let decoded = TestWord::decode(&mut cursor).expect("Failed to decode");
+        // 32-bit
+        let raw_bytes32: [u8; 4] = [0x78, 0x56, 0x34, 0x12];
+        let mut cursor32 = Bytes::copy_from_slice(&raw_bytes32);
+        let decoded32 = TestDWord::decode(&mut cursor32).expect("Failed to decode u32");
+        assert_eq!(decoded32.value(), 0x12345678);
+        let mut buffer32 = BytesMut::with_capacity(decoded32.encoded_len());
+        decoded32
+            .encode(&mut buffer32)
+            .expect("Failed to encode u32");
+        assert_eq!(buffer32.as_ref(), &raw_bytes32);
 
-        assert_eq!(decoded.value(), 0x1234);
-
-        let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
-        decoded.encode(&mut buffer).expect("Failed to encode");
-        assert_eq!(
-            buffer.as_ref(),
-            &raw_bytes,
-            "Inconsistent encode/decode symmetry"
-        );
+        // 64-bit
+        let raw_bytes64: [u8; 8] = [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01];
+        let mut cursor64 = Bytes::copy_from_slice(&raw_bytes64);
+        let decoded64 = TestLWord::decode(&mut cursor64).expect("Failed to decode u64");
+        assert_eq!(decoded64.value(), 0x0123456789ABCDEF);
+        let mut buffer64 = BytesMut::with_capacity(decoded64.encoded_len());
+        decoded64
+            .encode(&mut buffer64)
+            .expect("Failed to encode u64");
+        assert_eq!(buffer64.as_ref(), &raw_bytes64);
     }
 
     #[test]
     fn serialization_error_truncated_buffer_fails() {
-        let raw_bytes: [u8; 1] = [0x34];
-        let mut cursor = Bytes::copy_from_slice(&raw_bytes);
-        let result = TestWord::decode(&mut cursor);
-
+        // u16
+        let mut cursor = Bytes::copy_from_slice(&[0x34]);
         assert!(matches!(
-            result,
+            TestWord::decode(&mut cursor),
             Err(BinaryError::Truncated { expected: 2, .. })
+        ));
+
+        // u32
+        let mut cursor = Bytes::copy_from_slice(&[0x34, 0x12, 0x00]);
+        assert!(matches!(
+            TestDWord::decode(&mut cursor),
+            Err(BinaryError::Truncated { expected: 4, .. })
+        ));
+
+        // u64
+        let mut cursor = Bytes::copy_from_slice(&[0x34, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00]);
+        assert!(matches!(
+            TestLWord::decode(&mut cursor),
+            Err(BinaryError::Truncated { expected: 8, .. })
         ));
     }
 
     #[test]
     fn serialization_error_buffer_too_small_fails() {
-        let val = TestWord::new(0x1234);
-        let mut buf = [0u8; 1];
+        // u32
+        let val32 = TestDWord::new(0x12345678);
+        let mut buf = [0u8; 3];
         let mut buffer = &mut buf[..];
-        let result = val.encode(&mut buffer);
-
         assert!(matches!(
-            result,
-            Err(BinaryError::BufferTooSmall { expected: 2, .. })
+            val32.encode(&mut buffer),
+            Err(BinaryError::BufferTooSmall { expected: 4, .. })
+        ));
+
+        // u64
+        let val64 = TestLWord::new(0x0123456789ABCDEF);
+        let mut buf = [0u8; 7];
+        let mut buffer = &mut buf[..];
+        assert!(matches!(
+            val64.encode(&mut buffer),
+            Err(BinaryError::BufferTooSmall { expected: 8, .. })
         ));
     }
 }
