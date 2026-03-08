@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use super::ClassCode;
-use super::common::object::CipClass;
+use super::{ClassCode, common::object::CipClass, registry_error::RegistryError};
 
 #[derive(Default)]
 pub struct Registry {
@@ -26,7 +25,7 @@ impl Registry {
         &self,
         class_id: ClassCode,
         instance_id: u16,
-    ) -> Result<Arc<T>, String> {
+    ) -> Result<Arc<T>, RegistryError> {
         log::debug!(
             "Getting instance of class {} with id {}",
             class_id,
@@ -34,25 +33,32 @@ impl Registry {
         );
         let class = self
             .get(class_id.into())
-            .ok_or(format!("Class {} not found", class_id))?;
-        let instance_ptr = class
-            .get_instance(instance_id)
-            .map_err(|_| format!("Instance {} for class {} not found", instance_id, class_id))?;
+            .ok_or(RegistryError::ClassNotFound { class_id })?;
+        let instance_ptr =
+            class
+                .get_instance(instance_id)
+                .map_err(|_| RegistryError::InstanceNotFound {
+                    class_id,
+                    instance_id,
+                })?;
 
         let any_arc = instance_ptr.as_any_arc();
         any_arc
             .downcast::<T>()
-            .map_err(|_| format!("Failed to downcast class {} to requested type", class_id))
+            .map_err(|_| RegistryError::DowncastFailed { class_id })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{net::Ipv4Addr, sync::Arc};
+
     use super::*;
-    use crate::cip::cip_identity::{IdentityClass, IdentityInfo, IdentityInstance};
-    use crate::cip::tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance};
-    use std::net::Ipv4Addr;
-    use std::sync::Arc;
+    use crate::cip::{
+        cip_identity::{IdentityClass, IdentityInfo, IdentityInstance},
+        registry_error::RegistryError,
+        tcp_ip_interface::{TcpIpInterfaceClass, TcpIpInterfaceInstance},
+    };
 
     #[test]
     fn registry_register_and_get_class_success() {
@@ -152,11 +158,11 @@ mod tests {
     fn registry_get_instance_class_not_found_fails() {
         let registry = Registry::new();
 
-        let error_message = registry
+        let error = registry
             .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
             .unwrap_err();
 
-        assert!(error_message.contains("not found"));
+        assert!(matches!(error, RegistryError::ClassNotFound { .. }));
     }
 
     #[test]
@@ -174,11 +180,11 @@ mod tests {
         let identity_class = IdentityClass::with_default_instance(&identity_info);
         registry.register(identity_class.clone());
 
-        let error_message = registry
+        let error = registry
             .get_instance::<IdentityInstance>(ClassCode::Identity, 2)
             .unwrap_err();
 
-        assert!(error_message.contains("Instance"));
+        assert!(matches!(error, RegistryError::InstanceNotFound { .. }));
     }
 
     #[test]
@@ -189,10 +195,10 @@ mod tests {
         tcp_class.add_instance(tcp_instance).unwrap();
         registry.register(tcp_class.clone());
 
-        let error_message = registry
+        let error = registry
             .get_instance::<IdentityInstance>(ClassCode::TcpIpInterface, 1)
             .unwrap_err();
 
-        assert!(error_message.contains("downcast"));
+        assert!(matches!(error, RegistryError::DowncastFailed { .. }));
     }
 }
