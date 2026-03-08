@@ -1,4 +1,3 @@
-use env_logger;
 use rs_eip_adapter::{cip::cip_identity::IdentityInfo, eip_stack::EipStackBuilder};
 use std::{io, net::Ipv4Addr};
 
