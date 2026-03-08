@@ -1,18 +1,32 @@
-use std::{fmt::Display, io};
+use std::io;
+
+use thiserror::Error;
 
 use super::{
     EncapsulationStatus,
     command::{EncapsulationCommand, register_session::RegisterSessionData},
 };
+use crate::cip::registry_error::RegistryError;
 use crate::common::binary::BinaryError;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Error)]
 pub enum EncapsulationError {
+    #[error("invalid or unsupported command: {0}")]
     InvalidOrUnsupportedCommand(EncapsulationCommand),
+
+    #[error("insufficient memory")]
     InsufficientMemory,
+
+    #[error("incorrect data")]
     IncorrectData,
+
+    #[error("invalid session handle: {0}")]
     InvalidSessionHandle(u32),
+
+    #[error("invalid length (expected: {expected}, actual: {actual})")]
     InvalidLength { expected: usize, actual: usize },
+
+    #[error("unsupported protocol ({0})")]
     UnsupportedProtocol(RegisterSessionData),
 }
 
@@ -45,39 +59,13 @@ impl From<BinaryError> for EncapsulationError {
     }
 }
 
-impl Display for EncapsulationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EncapsulationError::InvalidOrUnsupportedCommand(_) => {
-                write!(f, "Invalid or unsupported command")
-            }
-            EncapsulationError::InsufficientMemory => write!(f, "Insufficient memory"),
-            EncapsulationError::IncorrectData => write!(f, "Incorrect data"),
-            EncapsulationError::InvalidSessionHandle(_) => write!(f, "Invalid session handle"),
-            EncapsulationError::InvalidLength { expected, actual } => {
-                write!(
-                    f,
-                    "Invalid length: expected {}, actual: {}",
-                    expected, actual
-                )
-            }
-            EncapsulationError::UnsupportedProtocol(_) => write!(f, "Unsupported protocol"),
-        }
-    }
-}
-
-impl std::error::Error for EncapsulationError {}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum InternalError {
-    Io(io::Error),
-    Other(String),
-}
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
 
-impl From<io::Error> for InternalError {
-    fn from(err: io::Error) -> Self {
-        InternalError::Io(err)
-    }
+    #[error("other error: {0}")]
+    Other(String),
 }
 
 impl From<String> for InternalError {
@@ -86,33 +74,13 @@ impl From<String> for InternalError {
     }
 }
 
-impl Display for InternalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InternalError::Io(err) => write!(f, "I/O error: {}", err),
-            InternalError::Other(msg) => write!(f, "Other error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for InternalError {}
-
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum HandlerError {
-    Protocol(EncapsulationError),
-    Internal(InternalError),
-}
+    #[error("protocol error: {0}")]
+    Protocol(#[from] EncapsulationError),
 
-impl From<EncapsulationError> for HandlerError {
-    fn from(err: EncapsulationError) -> Self {
-        HandlerError::Protocol(err)
-    }
-}
-
-impl From<InternalError> for HandlerError {
-    fn from(err: InternalError) -> Self {
-        HandlerError::Internal(err)
-    }
+    #[error("internal error: {0}")]
+    Internal(#[from] InternalError),
 }
 
 impl From<String> for HandlerError {
@@ -121,13 +89,8 @@ impl From<String> for HandlerError {
     }
 }
 
-impl Display for HandlerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HandlerError::Protocol(err) => write!(f, "Protocol error: {}", err),
-            HandlerError::Internal(err) => write!(f, "Internal error: {}", err),
-        }
+impl From<RegistryError> for HandlerError {
+    fn from(err: RegistryError) -> Self {
+        HandlerError::Internal(InternalError::Other(err.to_string()))
     }
 }
-
-impl std::error::Error for HandlerError {}

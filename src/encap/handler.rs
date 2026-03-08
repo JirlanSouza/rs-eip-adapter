@@ -104,11 +104,6 @@ impl EncapsulationHandler {
         req: &mut RawEncapsulation,
         context: &mut ConnectionContext,
     ) -> Result<HandlerAction, InternalError> {
-        log::info!(
-            "Received new request from transport: {:?}, command: {:?}",
-            context.transport_type,
-            req.header.command
-        );
         log::debug!(
             "Received new request from transport: {:?}, header: {:?}, payload: {:?}",
             context.transport_type,
@@ -117,7 +112,7 @@ impl EncapsulationHandler {
         );
 
         if !context.transport_type.is_valid_command(req.header.command) {
-            if context.transport_type == TransportType::UDP(CastMode::Broadcast) {
+            if let TransportType::UDP(_) = &context.transport_type {
                 log::warn!(
                     "Invalid or unsupported command for UDP broadcast (command: {:?})",
                     req.header.command
@@ -141,7 +136,7 @@ impl EncapsulationHandler {
         }
 
         if req.header.command == EncapsulationCommand::Nop {
-            log::info!("Received NOP command no reply to send");
+            log::debug!("Received NOP command no reply to send");
             return Ok(HandlerAction::None);
         }
 
@@ -205,7 +200,7 @@ impl EncapsulationHandler {
         req: &Encapsulation,
         context: &mut ConnectionContext,
     ) -> Result<HandlerAction, HandlerError> {
-        log::info!("Dispatching command {:?}", req.header.command);
+        log::debug!("Dispatching command {:?}", req.header.command);
         match req.header.command {
             EncapsulationCommand::ListIdentity => {
                 if let EncapsulationPayload::None = req.payload {

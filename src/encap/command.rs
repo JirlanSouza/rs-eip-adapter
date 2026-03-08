@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 pub mod list_identity;
 pub mod register_session;
 pub mod unregister_session;
@@ -52,5 +54,11 @@ impl From<EncapsulationCommand> for u16 {
             EncapsulationCommand::Cancel => 0x0073,
             EncapsulationCommand::Unknown(v) => v,
         }
+    }
+}
+
+impl Display for EncapsulationCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

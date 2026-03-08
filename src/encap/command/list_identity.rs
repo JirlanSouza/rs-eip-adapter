@@ -26,7 +26,7 @@ impl ListIdentityHandler {
     }
 
     pub fn handle(&self, req_header: &EncapsulationHeader) -> Result<HandlerAction, HandlerError> {
-        log::info!("Handle ListIdentity request: {:?}", req_header);
+        log::debug!("Handle ListIdentity request: {:?}", req_header);
         let identity = self
             .registry
             .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
@@ -36,7 +36,7 @@ impl ListIdentityHandler {
             .get_instance::<TcpIpInterfaceInstance>(ClassCode::TcpIpInterface, 1)
             .map_err(HandlerError::from)?;
 
-        log::debug!("List identiry with TCP/IP Interface: {:?}", tcp_ip_if);
+        log::debug!("List identity with TCP/IP Interface: {:?}", tcp_ip_if);
         log::debug!("List identity with Identity: {:?}", identity);
 
         let identity_item = IdentityItem::new(Encapsulation::VERSION, &tcp_ip_if, &identity);

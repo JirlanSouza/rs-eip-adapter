@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use bytes::{Buf, BufMut};
 
@@ -58,6 +58,16 @@ impl ToBytes for RegisterSessionData {
 
     fn encoded_len(&self) -> usize {
         RegisterSessionData::LEN
+    }
+}
+
+impl Display for RegisterSessionData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "protocol_version: {}, options: {}",
+            self.protocol_version, self.options
+        )
     }
 }
 
