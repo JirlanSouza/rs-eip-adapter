@@ -243,3 +243,235 @@ impl EncapsulationHandler {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{error::Error, sync::Arc};
+
+    use bytes::{Bytes, BytesMut};
+
+    use super::*;
+    use crate::cip::registry::Registry;
+    use crate::common::binary::ToBytes;
+    use crate::encap::{
+        command::register_session::RegisterSessionData,
+        header::{EncapsulationHeader, EncapsulationStatus},
+        payload::EncapsulationPayload,
+        session_manager::SessionManager,
+    };
+
+    fn setup_handler() -> EncapsulationHandler {
+        let registry = Arc::new(Registry::new());
+        let session_manager = Arc::new(SessionManager::new());
+        EncapsulationHandler::new(registry, session_manager)
+    }
+
+    fn setup_context(transport: TransportType) -> ConnectionContext {
+        ConnectionContext::new("127.0.0.1:12345".parse().unwrap(), transport)
+    }
+
+    #[test]
+    fn transport_type_is_valid_command_tcp_success() {
+        let tcp = TransportType::TCP;
+        assert!(
+            tcp.is_valid_command(EncapsulationCommand::ListIdentity),
+            "TCP should support ListIdentity"
+        );
+        assert!(
+            tcp.is_valid_command(EncapsulationCommand::RegisterSession),
+            "TCP should support RegisterSession"
+        );
+    }
+
+    #[test]
+    fn transport_type_is_valid_command_udp_unicast_success() {
+        let udp = TransportType::UDP(CastMode::Unicast);
+        assert!(
+            udp.is_valid_command(EncapsulationCommand::ListIdentity),
+            "UDP unicast should support ListIdentity"
+        );
+        assert!(
+            !udp.is_valid_command(EncapsulationCommand::RegisterSession),
+            "UDP unicast should NOT support RegisterSession"
+        );
+    }
+
+    #[test]
+    fn handler_handle_nop_command_returns_none() -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let mut context = setup_context(TransportType::TCP);
+        let mut req = RawEncapsulation {
+            header: EncapsulationHeader {
+                command: EncapsulationCommand::Nop,
+                ..Default::default()
+            },
+            payload: Bytes::new(),
+        };
+
+        let result = handler.handle(&mut req, &mut context)?;
+        assert_eq!(
+            result,
+            HandlerAction::None,
+            "NOP command should return None action"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn handler_handle_invalid_command_for_transport_returns_error_reply()
+    -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let mut context = setup_context(TransportType::UDP(CastMode::Unicast));
+        let mut req = RawEncapsulation {
+            header: EncapsulationHeader {
+                command: EncapsulationCommand::RegisterSession,
+                ..Default::default()
+            },
+            payload: Bytes::new(),
+        };
+
+        let result = handler.handle(&mut req, &mut context)?;
+        if let HandlerAction::Reply(encap) = result {
+            assert_eq!(
+                encap.header.status,
+                EncapsulationStatus::InvalidOrUnsupportedCommand,
+                "Should return InvalidOrUnsupportedCommand status"
+            );
+        } else {
+            panic!("Expected HandlerAction::Reply");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn handler_handle_invalid_status_header_returns_none() -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let mut context = setup_context(TransportType::TCP);
+        let mut req = RawEncapsulation {
+            header: EncapsulationHeader {
+                command: EncapsulationCommand::ListIdentity,
+                status: EncapsulationStatus::IncorrectData,
+                ..Default::default()
+            },
+            payload: Bytes::new(),
+        };
+
+        let result = handler.handle(&mut req, &mut context)?;
+        assert_eq!(
+            result,
+            HandlerAction::None,
+            "Non-success status in header should result in HandlerAction::None"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn handler_handle_registration_success() -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let mut context = setup_context(TransportType::TCP);
+
+        let reg_data = RegisterSessionData {
+            protocol_version: 1,
+            options: 0,
+        };
+        let mut payload_buf = BytesMut::with_capacity(reg_data.encoded_len());
+        reg_data.encode(&mut payload_buf)?;
+
+        let mut req = RawEncapsulation {
+            header: EncapsulationHeader {
+                command: EncapsulationCommand::RegisterSession,
+                length: payload_buf.len() as u16,
+                ..Default::default()
+            },
+            payload: payload_buf.freeze(),
+        };
+
+        let result = handler.handle(&mut req, &mut context)?;
+        if let HandlerAction::Reply(encap) = result {
+            assert_eq!(
+                encap.header.command,
+                EncapsulationCommand::RegisterSession,
+                "Reply should be RegisterSession"
+            );
+            assert_eq!(
+                encap.header.status,
+                EncapsulationStatus::Success,
+                "Reply status should be Success"
+            );
+            if let EncapsulationPayload::RegisterSession(data) = encap.payload {
+                assert_eq!(data.protocol_version, 1, "Protocol version mismatch");
+            } else {
+                panic!("Expected RegisterSession payload");
+            }
+        } else {
+            panic!("Expected HandlerAction::Reply");
+        }
+
+        assert!(
+            context.session_handle.is_some(),
+            "Session handle should be set in context"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn handler_handle_unregistration_success() -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let mut context = setup_context(TransportType::TCP);
+        context.session_handle = Some(123);
+
+        let mut req = RawEncapsulation {
+            header: EncapsulationHeader {
+                command: EncapsulationCommand::UnregisterSession,
+                session_handle: 123,
+                ..Default::default()
+            },
+            payload: Bytes::new(),
+        };
+
+        let result = handler.handle(&mut req, &mut context)?;
+        assert_eq!(
+            result,
+            HandlerAction::DropConnection,
+            "UnregisterSession should return DropConnection action"
+        );
+        assert!(
+            context.session_handle.is_none(),
+            "Session handle should be cleared"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn handler_handle_error_reply_formatting() -> Result<(), Box<dyn Error>> {
+        let handler = setup_handler();
+        let header = EncapsulationHeader {
+            command: EncapsulationCommand::RegisterSession,
+            ..Default::default()
+        };
+
+        let error_data = RegisterSessionData {
+            protocol_version: 1,
+            options: 0,
+        };
+
+        let result = handler
+            .handle_error_reply(&header, EncapsulationError::UnsupportedProtocol(error_data));
+        if let Ok(HandlerAction::Reply(encap)) = result {
+            assert_eq!(
+                encap.header.status,
+                EncapsulationStatus::UnsupportedProtocol,
+                "Status mismatch"
+            );
+            assert_eq!(encap.header.length, 4, "Length mismatch in header");
+            if let EncapsulationPayload::RegisterSession(data) = encap.payload {
+                assert_eq!(data.protocol_version, 1, "Payload data mismatch");
+            } else {
+                panic!("Expected RegisterSession payload data for UnsupportedProtocol error");
+            }
+        } else {
+            panic!("Expected HandlerAction::Reply");
+        }
+        Ok(())
+    }
+}
