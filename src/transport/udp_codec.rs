@@ -1,10 +1,8 @@
 use bytes::BytesMut;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{
-    common::binary::{FromBytes, ToBytes},
-    encap::{Encapsulation, RawEncapsulation, header::EncapsulationHeader},
-};
+use crate::common::binary::{FromBytes, ToBytes};
+use crate::encap::{Encapsulation, RawEncapsulation, header::EncapsulationHeader};
 
 pub struct EncapsulationUdpCodec;
 
@@ -13,9 +11,9 @@ impl Decoder for EncapsulationUdpCodec {
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        log::info!("Decoding UDP datagram: {}", src.len());
+        log::trace!("Decoding UDP datagram: {}", src.len());
         if src.len() < EncapsulationHeader::LEN {
-            log::info!(
+            log::trace!(
                 "Not enough bytes to read header: {} < {}",
                 src.len(),
                 EncapsulationHeader::LEN
@@ -26,7 +24,7 @@ impl Decoder for EncapsulationUdpCodec {
 
         let len_opt = EncapsulationHeader::length_from_bytes(src);
         if len_opt.is_none() {
-            log::info!(
+            log::trace!(
                 "Not enough bytes to read length from header bytes: {}",
                 src.len()
             );
@@ -49,7 +47,7 @@ impl Encoder<Encapsulation> for EncapsulationUdpCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: Encapsulation, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        log::info!(
+        log::trace!(
             "Encoding encapsulation command: {:?}, length: {}",
             item.header.command,
             item.header.length

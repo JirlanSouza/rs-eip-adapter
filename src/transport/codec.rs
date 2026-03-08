@@ -1,10 +1,8 @@
 use bytes::{Buf, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::{
-    common::binary::{FromBytes, ToBytes},
-    encap::{Encapsulation, RawEncapsulation, header::EncapsulationHeader},
-};
+use crate::common::binary::{FromBytes, ToBytes};
+use crate::encap::{Encapsulation, RawEncapsulation, header::EncapsulationHeader};
 
 pub struct EncapsulationCodec;
 
@@ -13,9 +11,9 @@ impl Decoder for EncapsulationCodec {
     type Error = std::io::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        log::info!("Decoding TCP frame: {}", src.len());
+        log::trace!("Decoding TCP frame: {}", src.len());
         if src.len() < EncapsulationHeader::LEN {
-            log::info!(
+            log::trace!(
                 "Not enough bytes to read header: {} < {}",
                 src.len(),
                 EncapsulationHeader::LEN
@@ -25,7 +23,7 @@ impl Decoder for EncapsulationCodec {
 
         let len_opt = EncapsulationHeader::length_from_bytes(src);
         if len_opt.is_none() {
-            log::info!(
+            log::trace!(
                 "Not enough bytes to read length from header bytes: {}",
                 src.len()
             );
@@ -33,7 +31,7 @@ impl Decoder for EncapsulationCodec {
         }
         let len = len_opt.unwrap();
         if src.len() < len as usize + EncapsulationHeader::LEN {
-            log::info!(
+            log::trace!(
                 "Not enough bytes to read encapsulation: {} < {}",
                 src.len(),
                 len as usize + EncapsulationHeader::LEN
@@ -44,7 +42,7 @@ impl Decoder for EncapsulationCodec {
         let header =
             EncapsulationHeader::decode(&mut src.split_to(EncapsulationHeader::LEN).freeze())
                 .map_err(|err| {
-                    log::info!("Failed to decode header: {}", err);
+                    log::debug!("Failed to decode header: {}", err);
                     src.advance(EncapsulationHeader::LEN + len as usize);
                     std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())
                 })?;
@@ -58,7 +56,7 @@ impl Encoder<Encapsulation> for EncapsulationCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: Encapsulation, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        log::info!(
+        log::trace!(
             "Encoding encapsulation command: {:?}, length: {}",
             item.header.command,
             item.header.length

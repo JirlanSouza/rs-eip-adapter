@@ -1,4 +1,8 @@
-use std::{io, net::Ipv4Addr, sync::Arc};
+use std::{
+    io,
+    net::{IpAddr, Ipv4Addr},
+    sync::Arc,
+};
 
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use tokio::{net::UdpSocket, sync::broadcast::Sender};
@@ -69,8 +73,8 @@ impl UdpTransport {
 
         let frame_result = frame_result_opt.unwrap();
         if let Ok((mut frame, peer_addr)) = frame_result {
-            let mut context =
-                ConnectionContext::new(peer_addr, TransportType::UDP(CastMode::Broadcast));
+            let cast_mode = Self::detect_cast_mode(&peer_addr.ip());
+            let mut context = ConnectionContext::new(peer_addr, TransportType::UDP(cast_mode));
 
             match self.handler.handle(&mut frame, &mut context) {
                 Ok(HandlerAction::Reply(reply)) => {
@@ -79,7 +83,7 @@ impl UdpTransport {
                     }
                 }
                 Ok(HandlerAction::None) => {
-                    log::info!("No reply to send to: {}", peer_addr);
+                    log::debug!("No reply to send to: {}", peer_addr);
                 }
                 Ok(HandlerAction::DropConnection) => {
                     log::warn!("Received a HandlerAction::DropConnection in UDP transport");
@@ -95,5 +99,26 @@ impl UdpTransport {
             "Failed to decode UDP datagram: {}",
             frame_result.unwrap_err()
         );
+    }
+
+    fn detect_cast_mode(ip: &IpAddr) -> CastMode {
+        match ip {
+            IpAddr::V4(addr) => {
+                if addr.is_broadcast() || addr.octets()[3] == 255 {
+                    CastMode::Broadcast
+                } else if addr.is_multicast() {
+                    CastMode::Multicast
+                } else {
+                    CastMode::Unicast
+                }
+            }
+            IpAddr::V6(addr) => {
+                if addr.is_multicast() {
+                    CastMode::Multicast
+                } else {
+                    CastMode::Unicast
+                }
+            }
+        }
     }
 }

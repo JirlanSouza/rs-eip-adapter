@@ -1,6 +1,7 @@
 use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
+    ops::ControlFlow,
     sync::Arc,
 };
 
@@ -79,8 +80,8 @@ impl TcpTransport {
         loop {
             tokio::select! {
                 result = self.handle_framed(&mut framed, &mut context) => {
-                    if result.is_none() {
-                        log::info!("Closing TCP connection: {}", context.peer_addr);
+                    if result.is_break() {
+                        log::debug!("Closing TCP connection: {}", context.peer_addr);
                         match framed.close().await {
                             Ok(_) => log::info!("TCP connection closed"),
                             Err(err) => log::error!("Failed to close TCP connection: {}", err),
@@ -101,12 +102,12 @@ impl TcpTransport {
         &self,
         framed: &mut Framed<TcpStream, EncapsulationCodec>,
         context: &mut ConnectionContext,
-    ) -> Option<()> {
+    ) -> ControlFlow<()> {
         let frame_result_opt = framed.next().await;
 
         if frame_result_opt.is_none() {
             log::error!("Failed to receive TCP frame");
-            return Some(());
+            return ControlFlow::Continue(());
         }
 
         let frame_result = frame_result_opt.unwrap();
@@ -119,19 +120,19 @@ impl TcpTransport {
                         log::error!("Failed to send reply: {}", err);
                     }
 
-                    Some(())
+                    ControlFlow::Continue(())
                 }
                 Ok(HandlerAction::None) => {
-                    log::info!("No reply to send to: {}", context.peer_addr);
-                    Some(())
+                    log::debug!("No reply to send to: {}", context.peer_addr);
+                    ControlFlow::Continue(())
                 }
                 Ok(HandlerAction::DropConnection) => {
-                    log::info!("Dropping connection to: {}", context.peer_addr);
-                    None
+                    log::debug!("Dropping connection to: {}", context.peer_addr);
+                    ControlFlow::Break(())
                 }
                 Err(err) => {
                     log::error!("Failed to handle request: {}", err);
-                    None
+                    ControlFlow::Break(())
                 }
             }
         } else {
@@ -139,7 +140,7 @@ impl TcpTransport {
                 "Failed to decode TCP datagram: {}",
                 frame_result.unwrap_err()
             );
-            Some(())
+            ControlFlow::Continue(())
         }
     }
 }
