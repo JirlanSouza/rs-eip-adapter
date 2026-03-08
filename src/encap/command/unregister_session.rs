@@ -29,7 +29,7 @@ impl UnregisterSessionHandler {
 #[cfg(test)]
 mod tests {
     use std::net::{Ipv4Addr, SocketAddr};
-    
+
     use super::*;
     use crate::encap::{
         command::EncapsulationCommand, handler::TransportType, header::EncapsulationStatus,
