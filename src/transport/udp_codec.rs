@@ -8,12 +8,6 @@ use crate::{
 
 pub struct EncapsulationUdpCodec;
 
-impl EncapsulationUdpCodec {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
 impl Decoder for EncapsulationUdpCodec {
     type Item = RawEncapsulation;
     type Error = std::io::Error;

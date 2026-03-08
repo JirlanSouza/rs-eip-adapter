@@ -1,14 +1,13 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
+#[derive(Default)]
 pub struct SessionManager {
     next: AtomicU32,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
-        Self {
-            next: AtomicU32::new(1),
-        }
+        Self::default()
     }
 
     pub fn new_session(&self) -> u32 {

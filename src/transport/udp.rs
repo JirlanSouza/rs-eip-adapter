@@ -44,7 +44,7 @@ impl UdpTransport {
             socket.local_addr()?
         );
 
-        let mut framed = UdpFramed::new(socket, EncapsulationUdpCodec::new());
+        let mut framed = UdpFramed::new(socket, EncapsulationUdpCodec);
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         loop {

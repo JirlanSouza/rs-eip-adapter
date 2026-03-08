@@ -73,7 +73,7 @@ impl TcpTransport {
 
     async fn handle_connection(&mut self, stream: TcpStream, src: SocketAddr) {
         let mut context = ConnectionContext::new(src, TransportType::TCP);
-        let mut framed = Framed::new(stream, EncapsulationCodec::new());
+        let mut framed = Framed::new(stream, EncapsulationCodec);
         let mut connection_shutdown_rx = self.shutdown.subscribe();
 
         loop {
@@ -111,7 +111,7 @@ impl TcpTransport {
 
         let frame_result = frame_result_opt.unwrap();
         if let Ok(mut frame) = frame_result {
-            return match self.handler.handle(&mut frame, context) {
+            match self.handler.handle(&mut frame, context) {
                 Ok(HandlerAction::Reply(reply)) => {
                     log::debug!("Sending reply: ({:?})", reply);
 
@@ -133,7 +133,7 @@ impl TcpTransport {
                     log::error!("Failed to handle request: {}", err);
                     None
                 }
-            };
+            }
         } else {
             log::error!(
                 "Failed to decode TCP datagram: {}",
