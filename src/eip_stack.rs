@@ -47,7 +47,7 @@ impl EipStack {
 
         self.shutdown_tx.send(()).map_err(|err| {
             log::error!("Error on send shutdown signal: {}", err);
-            io::Error::new(io::ErrorKind::Other, "Error on send shutdown signal")
+            io::Error::other("Error on send shutdown signal")
         })?;
         Ok(())
     }
@@ -72,7 +72,7 @@ impl EipStack {
 
         shutdown_tx.send(()).map_err(|err| {
             log::error!("Error on send shutdown signal: {}", err);
-            io::Error::new(io::ErrorKind::Other, "Error on send shutdown signal")
+            io::Error::other("Error on send shutdown signal")
         })?;
         Ok(())
     }
@@ -133,7 +133,7 @@ impl EipStackBuilder {
 
         tcp_ip_if_class
             .add_instance(tcp_ip_if_instance)
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "CIP Registration Error"))?;
+            .map_err(|_| io::Error::other("CIP Registration Error"))?;
 
         self.registry.register(tcp_ip_if_class);
 
