@@ -1,5 +1,5 @@
 use std::{io, net::Ipv4Addr, sync::Arc};
-use tokio::sync::{Mutex, broadcast::Sender};
+use tokio::sync::broadcast::Sender;
 
 use crate::{
     cip::{
@@ -12,36 +12,12 @@ use crate::{
     transport::{tcp::TcpTransport, udp::UdpTransport},
 };
 
-pub struct EipStack {
+pub struct EipStackHandle {
     registry: Arc<Registry>,
-    udp_transport: Arc<Mutex<UdpTransport>>,
-    tcp_transport: Arc<Mutex<TcpTransport>>,
     shutdown_tx: Arc<Sender<()>>,
 }
 
-impl EipStack {
-    pub async fn start(&self) -> io::Result<()> {
-        log::info!("Starting EIP stack");
-
-        let udp_transport = self.udp_transport.clone();
-        let udp_handle = tokio::spawn(async move {
-            _ = udp_transport.lock().await.listen().await;
-        });
-
-        let tcp_transport = self.tcp_transport.clone();
-        let tcp_handle = tokio::spawn(async move {
-            _ = tcp_transport.lock().await.listen().await;
-        });
-
-        let shutdown_tx = self.shutdown_tx.clone();
-        let shutdown_handle = tokio::spawn(async move {
-            _ = EipStack::handle_graceful_shutdown(shutdown_tx).await;
-        });
-
-        tokio::try_join!(udp_handle, tcp_handle, shutdown_handle)?;
-        Ok(())
-    }
-
+impl EipStackHandle {
     pub fn stop(&self) -> io::Result<()> {
         log::info!("Stopping EIP stack");
 
@@ -54,6 +30,42 @@ impl EipStack {
 
     pub fn get_registry(&self) -> Arc<Registry> {
         self.registry.clone()
+    }
+}
+
+pub struct EipStack {
+    registry: Arc<Registry>,
+    udp_transport: UdpTransport,
+    tcp_transport: TcpTransport,
+    shutdown_tx: Arc<Sender<()>>,
+}
+
+impl EipStack {
+    pub fn handle(&self) -> EipStackHandle {
+        EipStackHandle {
+            registry: self.registry.clone(),
+            shutdown_tx: self.shutdown_tx.clone(),
+        }
+    }
+
+    pub async fn start(mut self) -> io::Result<()> {
+        log::info!("Starting EIP stack");
+
+        let udp_handle = tokio::spawn(async move {
+            _ = self.udp_transport.listen().await;
+        });
+
+        let tcp_handle = tokio::spawn(async move {
+            _ = self.tcp_transport.listen().await;
+        });
+
+        let shutdown_tx = self.shutdown_tx.clone();
+        let shutdown_handle = tokio::spawn(async move {
+            _ = EipStack::handle_graceful_shutdown(shutdown_tx).await;
+        });
+
+        tokio::try_join!(udp_handle, tcp_handle, shutdown_handle)?;
+        Ok(())
     }
 
     async fn handle_graceful_shutdown(shutdown_tx: Arc<Sender<()>>) -> io::Result<()> {
@@ -156,8 +168,8 @@ impl EipStackBuilder {
 
         Ok(EipStack {
             registry,
-            udp_transport: Arc::new(Mutex::new(udp_transport)),
-            tcp_transport: Arc::new(Mutex::new(tcp_transport)),
+            udp_transport,
+            tcp_transport,
             shutdown_tx,
         })
     }

@@ -1,10 +1,10 @@
-use std::{io::Error, net::Ipv4Addr, sync::Arc};
+use std::{io::Error, net::Ipv4Addr};
 use tokio::{task::JoinHandle, time};
 
 use crate::common::{tcp, udp};
 use rs_eip_adapter::{
     cip::cip_identity::IdentityInfo,
-    eip_stack::{EipStack, EipStackBuilder},
+    eip_stack::{EipStackBuilder, EipStackHandle},
 };
 
 pub const DEFAULT_IDENTITY_INFO: IdentityInfo = IdentityInfo {
@@ -21,7 +21,7 @@ pub const TEST_TIMEOUT_MS: u16 = 2000;
 const SERVER_STARTUP_TIMEOUT_MS: u16 = 100;
 
 pub struct TestContext {
-    eip_stack: Arc<EipStack>,
+    stack_handle: EipStackHandle,
     server_handle: JoinHandle<Result<(), Error>>,
     pub udp_broadcast_port: u16,
     pub tcp_port: u16,
@@ -29,7 +29,7 @@ pub struct TestContext {
 
 impl TestContext {
     pub async fn stop(self) {
-        _ = self.eip_stack.stop();
+        _ = self.stack_handle.stop();
         _ = self
             .server_handle
             .await
@@ -43,24 +43,23 @@ pub async fn run_stack(identity_info: IdentityInfo) -> Result<TestContext, Error
     let udp_broadcast_port = udp::get_free_port().await;
     let tcp_port = tcp::get_free_port().await;
 
-    let eip_stack = Arc::new(
-        EipStackBuilder::new(identity_info)
-            .with_address(local_address)
-            .with_tcp_port(tcp_port)
-            .with_udp_broadcast_port(udp_broadcast_port)
-            .build()
-            .await
-            .expect("Error build Eip stack"),
-    );
-    let eip_stack_clone = eip_stack.clone();
-    let server_handle = tokio::spawn(async move { eip_stack_clone.start().await });
+    let eip_stack = EipStackBuilder::new(identity_info)
+        .with_address(local_address)
+        .with_tcp_port(tcp_port)
+        .with_udp_broadcast_port(udp_broadcast_port)
+        .build()
+        .await
+        .expect("Error build Eip stack");
+
+    let stack_handle = eip_stack.handle();
+    let server_handle = tokio::spawn(async move { eip_stack.start().await });
 
     tokio::time::sleep(time::Duration::from_millis(
         SERVER_STARTUP_TIMEOUT_MS as u64,
     ))
     .await;
     Ok(TestContext {
-        eip_stack,
+        stack_handle,
         server_handle,
         udp_broadcast_port,
         tcp_port,
