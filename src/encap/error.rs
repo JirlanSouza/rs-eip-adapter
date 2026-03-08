@@ -66,55 +66,7 @@ impl Display for EncapsulationError {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub enum DecodeError {
-    Truncated { expected: usize, actual: usize },
-    LengthMismatch { expected: usize, actual: usize },
-    Other(String),
-}
-
-impl Display for DecodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DecodeError::Truncated { expected, actual } => write!(
-                f,
-                "Incomplete frame minimum size: expected {}, actual: {}",
-                expected, actual
-            ),
-            DecodeError::LengthMismatch { expected, actual } => write!(
-                f,
-                "Invalid payload length: expected {}, actual: {}",
-                expected, actual
-            ),
-            DecodeError::Other(msg) => write!(f, "Other error: {}", msg),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum EncodeError {
-    BufferTooSmall { expected: usize, actual: usize },
-    Other(String),
-}
-
-impl From<String> for EncodeError {
-    fn from(err: String) -> Self {
-        EncodeError::Other(err)
-    }
-}
-
-impl Display for EncodeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EncodeError::BufferTooSmall { expected, actual } => write!(
-                f,
-                "Buffer too small: expected {}, actual: {}",
-                expected, actual
-            ),
-            EncodeError::Other(msg) => write!(f, "Other error: {}", msg),
-        }
-    }
-}
+impl std::error::Error for EncapsulationError {}
 
 #[derive(Debug)]
 pub enum InternalError {
@@ -142,6 +94,8 @@ impl Display for InternalError {
         }
     }
 }
+
+impl std::error::Error for InternalError {}
 
 #[derive(Debug)]
 pub enum HandlerError {
@@ -175,3 +129,5 @@ impl Display for HandlerError {
         }
     }
 }
+
+impl std::error::Error for HandlerError {}
