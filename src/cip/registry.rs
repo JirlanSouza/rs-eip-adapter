@@ -3,15 +3,14 @@ use std::{collections::HashMap, sync::Arc};
 use super::ClassCode;
 use super::common::object::CipClass;
 
+#[derive(Default)]
 pub struct Registry {
     classes: HashMap<u16, Arc<dyn CipClass>>,
 }
 
 impl Registry {
     pub fn new() -> Self {
-        Self {
-            classes: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn register(&mut self, class: Arc<dyn CipClass>) {

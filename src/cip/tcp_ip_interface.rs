@@ -24,7 +24,7 @@ use crate::{
 const AF_INET: u16 = 2;
 pub const EIP_RESERVED_PORT: u16 = 0xAF12;
 
-#[derive(CipClass)]
+#[derive(CipClass, Default)]
 #[cip(id = ClassCode::TcpIpInterface, name = "TCP/IP Interface", singleton = false)]
 pub struct TcpIpInterfaceClass {
     pub instances:
@@ -33,9 +33,7 @@ pub struct TcpIpInterfaceClass {
 
 impl TcpIpInterfaceClass {
     pub fn new() -> Self {
-        Self {
-            instances: std::sync::RwLock::new(std::collections::HashMap::new()),
-        }
+        Self::default()
     }
 }
 
@@ -160,12 +158,12 @@ impl ToBytes for InterfaceConfiguration {
     }
 
     fn encoded_len(&self) -> usize {
-        return self.ip_address.encoded_len()
+        self.ip_address.encoded_len()
             + self.network_mask.encoded_len()
             + self.gateway_address.encoded_len()
             + self.name_server.encoded_len()
             + self.name_server_2.encoded_len()
-            + self.domain_name.encoded_len();
+            + self.domain_name.encoded_len()
     }
 }
 
