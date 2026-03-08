@@ -114,7 +114,7 @@ impl EncapsulationHandler {
         if !context.transport_type.is_valid_command(req.header.command) {
             if let TransportType::UDP(_) = &context.transport_type {
                 log::warn!(
-                    "Invalid or unsupported command for UDP broadcast (command: {:?})",
+                    "Invalid or unsupported command for UDP (command: {:?})",
                     req.header.command
                 );
                 return Ok(HandlerAction::None);
@@ -313,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn handler_handle_invalid_command_for_transport_returns_error_reply()
+    fn handler_handle_invalid_command_for_transport_returns_none_for_udp()
     -> Result<(), Box<dyn Error>> {
         let handler = setup_handler();
         let mut context = setup_context(TransportType::UDP(CastMode::Unicast));
@@ -326,15 +326,11 @@ mod tests {
         };
 
         let result = handler.handle(&mut req, &mut context)?;
-        if let HandlerAction::Reply(encap) = result {
-            assert_eq!(
-                encap.header.status,
-                EncapsulationStatus::InvalidOrUnsupportedCommand,
-                "Should return InvalidOrUnsupportedCommand status"
-            );
-        } else {
-            panic!("Expected HandlerAction::Reply");
-        }
+        assert_eq!(
+            result,
+            HandlerAction::None,
+            "Invalid command for UDP should return None action"
+        );
         Ok(())
     }
 
