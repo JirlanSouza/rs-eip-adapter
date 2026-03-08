@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use bytes::{Buf, BufMut};
-use cip_macros::{cip_class, cip_instance, cip_object_impl};
+use cip_macros::{CipClass, CipInstance, cip_object_impl};
 
 use super::{
     ClassCode,
@@ -108,11 +108,20 @@ impl From<Test> for u16 {
     }
 }
 
-#[cip_class(id = ClassCode::Identity, name = "Identity", singleton = true)]
-pub struct IdentityClass {}
+#[derive(CipClass)]
+#[cip(id = ClassCode::Identity, name = "Identity", singleton = true, custom_services = true)]
+pub struct IdentityClass {
+    pub instance: RwLock<Arc<IdentityInstance>>,
+}
 
 #[cip_object_impl]
 impl IdentityClass {
+    pub fn new(instance: Arc<IdentityInstance>) -> Self {
+        Self {
+            instance: RwLock::new(instance),
+        }
+    }
+
     pub fn with_default_instance(info: &IdentityInfo) -> Arc<Self> {
         let instance = Arc::new(IdentityInstance::new(info));
 
@@ -122,8 +131,8 @@ impl IdentityClass {
     }
 }
 
-#[cip_instance]
-#[derive(Debug)]
+#[derive(Debug, CipInstance)]
+#[cip(custom_services = true)]
 pub struct IdentityInstance {
     id: u16,
     class_id: ClassCode,

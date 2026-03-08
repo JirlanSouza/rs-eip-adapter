@@ -2,7 +2,7 @@ use std::net::Ipv4Addr;
 
 use bytes::Buf;
 
-use cip_macros::{cip_class, cip_instance, cip_object_impl};
+use cip_macros::{CipClass, CipInstance, cip_object_impl};
 
 use super::{
     ClassCode,
@@ -24,11 +24,20 @@ use crate::{
 const AF_INET: u16 = 2;
 pub const EIP_RESERVED_PORT: u16 = 0xAF12;
 
-#[cip_class(id = ClassCode::TcpIpInterface, name = "TCP/IP Interface", singleton = false)]
-pub struct TcpIpInterfaceClass {}
+#[derive(CipClass)]
+#[cip(id = ClassCode::TcpIpInterface, name = "TCP/IP Interface", singleton = false)]
+pub struct TcpIpInterfaceClass {
+    pub instances:
+        std::sync::RwLock<std::collections::HashMap<u16, std::sync::Arc<dyn CipInstance>>>,
+}
 
-#[cip_object_impl]
-impl TcpIpInterfaceClass {}
+impl TcpIpInterfaceClass {
+    pub fn new() -> Self {
+        Self {
+            instances: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PhysicalLink {
@@ -160,28 +169,28 @@ impl ToBytes for InterfaceConfiguration {
     }
 }
 
-#[derive(Debug)]
-#[cip_instance]
+#[derive(Debug, CipInstance)]
+#[cip(custom_services = true)]
 pub struct TcpIpInterfaceInstance {
     id: u16,
     class_id: ClassCode,
 
-    #[attribute(id = 1, name = "Status", access = "get")]
+    #[attribute(id = 1, access = "get")]
     status: DWord,
 
-    #[attribute(id = 2, name = "Configuration Capability", access = "get")]
+    #[attribute(id = 2, access = "get")]
     configuration_capability: DWord,
 
-    #[attribute(id = 3, name = "Configuration Control", access = "get")]
+    #[attribute(id = 3, access = "get")]
     configuration_control: DWord,
 
-    #[attribute(id = 4, name = "Physical Link Object", access = "get")]
+    #[attribute(id = 4, access = "get")]
     phisical_link_object: PhysicalLink,
 
-    #[attribute(id = 5, name = "Interface Configuration", access = "set")]
+    #[attribute(id = 5, access = "set")]
     interface_configuration: InterfaceConfiguration,
 
-    #[attribute(id = 6, name = "Host Name", access = "get")]
+    #[attribute(id = 6, access = "get")]
     host_name: CipString<64>,
 }
 
