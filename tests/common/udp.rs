@@ -4,14 +4,12 @@ use tokio::{net::UdpSocket, time};
 pub async fn get_free_port() -> u16 {
     let listener = UdpSocket::bind("127.0.0.1:0")
         .await
-        .expect("Não foi possível encontrar uma porta livre");
+        .expect("It was not be possible to get a free UDP port");
 
-    let port = listener
+    listener
         .local_addr()
-        .expect("Falha ao ler endereço local")
-        .port();
-
-    port
+        .expect("Failure on retrive the local addr")
+        .port()
 }
 
 pub async fn send_and_receive(

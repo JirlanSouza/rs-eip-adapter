@@ -39,7 +39,7 @@ async fn list_identity_success_reply_is_correct() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 

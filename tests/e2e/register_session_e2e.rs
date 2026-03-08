@@ -31,7 +31,7 @@ async fn register_session_success() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 4);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 
@@ -39,7 +39,7 @@ async fn register_session_success() {
         protocol_version: 1,
         options: 0,
     };
-    let _ = register_session_data
+    register_session_data
         .encode(&mut request_buf)
         .expect("Error on encode register session data");
 
@@ -50,7 +50,7 @@ async fn register_session_success() {
         1000,
     )
     .await;
-    let _ = context.stop().await;
+    context.stop().await;
 
     assert!(reply.is_some());
 
@@ -86,7 +86,7 @@ async fn register_session_invalid_protocol_version() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 4);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 
@@ -94,7 +94,7 @@ async fn register_session_invalid_protocol_version() {
         protocol_version: 2,
         options: 0,
     };
-    let _ = register_session_data
+    register_session_data
         .encode(&mut request_buf)
         .expect("Error on encode register session data");
 
@@ -105,7 +105,7 @@ async fn register_session_invalid_protocol_version() {
         1000,
     )
     .await;
-    let _ = context.stop().await;
+    context.stop().await;
 
     assert!(reply.is_some());
 
@@ -148,7 +148,7 @@ async fn register_session_invalid_options() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 4);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 
@@ -156,7 +156,7 @@ async fn register_session_invalid_options() {
         protocol_version: 1,
         options: 1,
     };
-    let _ = register_session_data
+    register_session_data
         .encode(&mut request_buf)
         .expect("Error on encode register session data");
 
@@ -167,7 +167,7 @@ async fn register_session_invalid_options() {
         1000,
     )
     .await;
-    let _ = context.stop().await;
+    context.stop().await;
 
     assert!(reply.is_some());
 

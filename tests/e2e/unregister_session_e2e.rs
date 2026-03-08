@@ -26,7 +26,7 @@ async fn register_session_request(connection: &mut tcp::TcpConnection) -> u32 {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 4);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 

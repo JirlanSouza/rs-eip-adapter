@@ -30,7 +30,7 @@ async fn nop_no_data_sends_no_reply() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
 
@@ -41,7 +41,7 @@ async fn nop_no_data_sends_no_reply() {
         eip_stack::TEST_TIMEOUT_MS,
     )
     .await;
-    let _ = context.stop().await;
+    context.stop().await;
 
     assert!(reply.is_none());
 }
@@ -58,7 +58,7 @@ async fn nop_with_data_sends_no_reply() {
     };
 
     let mut request_buf = BytesMut::with_capacity(EncapsulationHeader::LEN + 4);
-    let _ = request_header
+    request_header
         .encode(&mut request_buf)
         .expect("Error on encode request header");
     request_buf.extend_from_slice(&[0u8; 4]);

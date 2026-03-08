@@ -10,14 +10,12 @@ use tokio::{
 pub async fn get_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .expect("Do not found a free port");
+        .expect("It was not be possible to get a free TCP port");
 
-    let port = listener
+    listener
         .local_addr()
-        .expect("Fail on get local address")
-        .port();
-
-    port
+        .expect("Failure on retrive the local addr")
+        .port()
 }
 
 pub async fn send_and_receive(

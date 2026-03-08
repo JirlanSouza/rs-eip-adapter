@@ -124,7 +124,7 @@ fn handler_should_reply_status_error_for_partially_supported_commands() {
         EncapsulationCommand::ListServices,
     ] {
         let request_header = EncapsulationHeader {
-            command: command.clone(),
+            command: *command,
             length: 0,
             session_handle: 0,
             status: EncapsulationStatus::Success,
@@ -175,7 +175,7 @@ fn handler_should_not_reply_on_list_identity_error() {
 
     let result = handler.handle(&mut encapsulation, &mut context);
 
-    assert!(matches!(result, Err(_)));
+    assert!(result.is_err());
 }
 
 #[test]
@@ -192,7 +192,7 @@ fn handler_should_reply_error_status_for_list_identity_payload_is_not_empty() {
     };
 
     let mut req_payload_bytes = BytesMut::with_capacity(4);
-    let _ = EncapsulationPayload::RegisterSession(RegisterSessionData {
+    EncapsulationPayload::RegisterSession(RegisterSessionData {
         protocol_version: 1,
         options: 0,
     })
