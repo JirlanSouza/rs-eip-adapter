@@ -444,7 +444,7 @@ mod tests {
         let raw_bytes: [u8; 2] = [0x01, 0xFF];
         let mut cursor = Bytes::copy_from_slice(&raw_bytes);
         let decoded = PortSegment::decode(&mut cursor).expect("Failed to decode link 255");
-        
+
         assert_eq!(decoded.link_address, LinkAddress::Default(255));
 
         let mut buffer = BytesMut::with_capacity(decoded.encoded_len());
