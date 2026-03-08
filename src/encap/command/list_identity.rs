@@ -47,7 +47,7 @@ impl ListIdentityHandler {
         let reply_header = EncapsulationHeader {
             status: EncapsulationStatus::Success,
             length: reply_payload.encoded_len() as u16,
-            ..req_header.clone()
+            ..*req_header
         };
         match Encapsulation::new(reply_header, reply_payload) {
             Ok(encapsulation) => Ok(HandlerAction::Reply(encapsulation)),

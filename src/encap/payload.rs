@@ -46,7 +46,10 @@ impl ToBytes for EncapsulationPayload {
     fn encode<T: BufMut>(&self, buffer: &mut T) -> Result<(), BinaryError> {
         match self {
             EncapsulationPayload::None => Ok(()),
-            EncapsulationPayload::Nop(data) => Ok(buffer.put(data.as_ref())),
+            EncapsulationPayload::Nop(data) => {
+                buffer.put(data.as_ref());
+                Ok(())
+            }
             EncapsulationPayload::RegisterSession(data) => data.encode(buffer),
             EncapsulationPayload::Cpf(cpf) => cpf.encode(buffer),
         }

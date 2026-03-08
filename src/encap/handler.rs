@@ -127,7 +127,7 @@ impl EncapsulationHandler {
 
             return self.handle_error_reply(
                 &req.header,
-                EncapsulationError::InvalidOrUnsupportedCommand(req.header.command.into()),
+                EncapsulationError::InvalidOrUnsupportedCommand(req.header.command),
             );
         }
 
@@ -160,7 +160,7 @@ impl EncapsulationHandler {
             Ok(action) => Ok(action),
             Err(error) => match error {
                 HandlerError::Protocol(p_error) => {
-                    return self.handle_error_reply(&req_encapsulation.header, p_error);
+                    self.handle_error_reply(&req_encapsulation.header, p_error)
                 }
                 _ => Err(InternalError::from(error.to_string())),
             },

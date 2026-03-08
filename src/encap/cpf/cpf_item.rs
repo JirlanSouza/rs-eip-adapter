@@ -43,7 +43,7 @@ impl From<CpfItemId> for u16 {
 
 impl Display for CpfItemId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let code: u16 = self.clone().into();
+        let code: u16 = (*self).into();
         match self {
             CpfItemId::NullAddress => write!(f, "{:#06x}: NullAddress", code),
             CpfItemId::ConnectedAddress => write!(f, "{:#06x}: ConnectedAddress", code),
