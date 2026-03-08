@@ -35,12 +35,13 @@ impl ListIdentityHandler {
             .registry
             .get_instance::<TcpIpInterfaceInstance>(ClassCode::TcpIpInterface, 1)
             .map_err(HandlerError::from)?;
+
         log::debug!("List identiry with TCP/IP Interface: {:?}", tcp_ip_if);
         log::debug!("List identity with Identity: {:?}", identity);
 
         let identity_item = IdentityItem::new(Encapsulation::VERSION, &tcp_ip_if, &identity);
         let mut cpf = Cpf::new();
-        cpf.add_item(CpfItem::IdentityItem(identity_item));
+        cpf.add_item(CpfItem::IdentityItem(Box::new(identity_item)));
 
         let reply_payload = EncapsulationPayload::Cpf(cpf);
         let reply_header = EncapsulationHeader {

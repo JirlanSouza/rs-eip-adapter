@@ -14,7 +14,7 @@ use rs_eip_adapter::{
 
 const CPF_HEADER_LEN: u16 = 6;
 const IDENTITY_ITEM_FIXED_DATA_LEN: u16 = 34;
-const IDENTITY_ITEM_PRODUCT_NAME_LEN: u16 = DEFAULT_IDENTITY_INFO.product_name.len() as u16 + 1;
+const IDENTITY_ITEM_PRODUCT_NAME_LEN: u16 = DEFAULT_IDENTITY_INFO.product_name.len() as u16;
 const REPLY_DEFAULT_IDENTITY_LENGTH: u16 =
     CPF_HEADER_LEN + IDENTITY_ITEM_FIXED_DATA_LEN + IDENTITY_ITEM_PRODUCT_NAME_LEN;
 
@@ -116,7 +116,7 @@ async fn list_identity_success_reply_is_correct() {
 
     let name_length = reply_buf[38];
     assert_eq!(name_length, DEFAULT_IDENTITY_INFO.product_name.len() as u8);
-    let name_end_index = 38 + IDENTITY_ITEM_PRODUCT_NAME_LEN as usize;
+    let name_end_index = 39 + IDENTITY_ITEM_PRODUCT_NAME_LEN as usize;
     assert_eq!(
         &reply_buf[39..name_end_index],
         DEFAULT_IDENTITY_INFO.product_name.as_bytes()

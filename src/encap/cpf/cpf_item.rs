@@ -5,7 +5,7 @@ use crate::common::binary::{BinaryError, FromBytes, ToBytes};
 use crate::encap::cpf::identity_item::IdentityItem;
 
 #[repr(u16)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpfItemId {
     NullAddress = 0x0000,
     ConnectedAddress = 0x00A1,
@@ -70,7 +70,7 @@ pub enum CpfItem {
     SequencedAddress,
     UnconnectedData,
     ConnectedData,
-    IdentityItem(IdentityItem),
+    IdentityItem(Box<IdentityItem>),
     SockAddrInfoOtoT,
     SockAddrInfoTtoO,
 }
@@ -125,7 +125,7 @@ impl FromBytes for CpfItem {
                 buffer.advance(item_len as usize);
                 CpfItem::ConnectedData
             }
-            0x000C => CpfItem::IdentityItem(IdentityItem::decode(buffer, item_len)?),
+            0x000C => CpfItem::IdentityItem(Box::new(IdentityItem::decode(buffer, item_len)?)),
             0x8000 => {
                 buffer.advance(item_len as usize);
                 CpfItem::SockAddrInfoOtoT
@@ -167,5 +167,97 @@ impl ToBytes for CpfItem {
             CpfItem::IdentityItem(item) => Self::HEADER_LEN + item.encoded_len(),
             _ => Self::HEADER_LEN,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cip::data_types::short_string::ShortString;
+    use bytes::BytesMut;
+
+    #[test]
+    fn cpf_item_id_mapping() {
+        assert_eq!(u16::from(CpfItemId::NullAddress), 0x0000);
+        assert_eq!(u16::from(CpfItemId::IdentityItem), 0x000C);
+
+        assert_eq!(CpfItemId::try_from(0x0000).unwrap(), CpfItemId::NullAddress);
+        assert_eq!(
+            CpfItemId::try_from(0x000C).unwrap(),
+            CpfItemId::IdentityItem
+        );
+        assert!(CpfItemId::try_from(0xFFFF).is_err());
+    }
+
+    #[test]
+    fn cpf_item_null_address_symmetry() {
+        let item = CpfItem::NullAddress;
+        let mut buffer = BytesMut::new();
+        item.encode(&mut buffer).expect("Failed to encode");
+
+        assert_eq!(buffer.as_ref(), &[0x00, 0x00, 0x00, 0x00]); // ID 0, Len 0
+
+        let mut cursor = buffer.freeze();
+        let decoded = CpfItem::decode(&mut cursor).expect("Failed to decode");
+        assert_eq!(decoded, item);
+    }
+
+    #[test]
+    fn cpf_item_unconnected_data_symmetry() {
+        let item = CpfItem::UnconnectedData;
+        let mut buffer = BytesMut::new();
+        item.encode(&mut buffer).expect("Failed to encode");
+
+        assert_eq!(buffer.as_ref(), &[0xB2, 0x00, 0x00, 0x00]); // ID 0xB2, Len 0
+
+        let mut cursor = buffer.freeze();
+        let decoded = CpfItem::decode(&mut cursor).expect("Failed to decode");
+        assert_eq!(decoded, item);
+    }
+
+    #[test]
+    fn cpf_item_identity_item_symmetry() {
+        let identity = IdentityItem {
+            protocol_version: 1,
+            sin_family: 2,
+            sin_port: 3,
+            sin_addr: 4,
+            sin_zero: [0; 8],
+            vendor_id: 5,
+            device_type: 6,
+            product_code: 7,
+            revision_major: 8,
+            revision_minor: 9,
+            status: 10,
+            serial_number: 11,
+            product_name: ShortString::from("Test"),
+            state: 12,
+        };
+        let item = CpfItem::IdentityItem(Box::new(identity));
+        let mut buffer = BytesMut::new();
+        item.encode(&mut buffer).expect("Failed to encode");
+
+        let mut cursor = buffer.freeze();
+        let decoded = CpfItem::decode(&mut cursor).expect("Failed to decode");
+        assert_eq!(decoded, item);
+    }
+
+    #[test]
+    fn cpf_item_decode_invalid_id_fails() {
+        let mut buffer = BytesMut::new();
+        buffer.put_u16_le(0xFFFF); // Invalid ID
+        buffer.put_u16_le(0);
+        let mut cursor = buffer.freeze();
+        let result = CpfItem::decode(&mut cursor);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cpf_item_decode_buffer_too_small_fails() {
+        let mut buffer = BytesMut::new();
+        buffer.put_u16_le(0x0000); // Only part of header
+        let mut cursor = buffer.freeze();
+        let result = CpfItem::decode(&mut cursor);
+        assert!(result.is_err());
     }
 }
