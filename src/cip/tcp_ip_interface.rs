@@ -40,9 +40,9 @@ impl TcpIpInterfaceClass {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct PhysicalLink {
-    path_size: u16,
-    path: PaddedEPath,
+pub struct PhysicalLink {
+    pub path_size: u16,
+    pub path: PaddedEPath,
 }
 
 impl PhysicalLink {
@@ -101,12 +101,12 @@ impl ToBytes for PhysicalLink {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InterfaceConfiguration {
-    ip_address: UDInt,
-    network_mask: UDInt,
-    gateway_address: UDInt,
-    name_server: UDInt,
-    name_server_2: UDInt,
-    domain_name: CipString<48>,
+    pub ip_address: UDInt,
+    pub network_mask: UDInt,
+    pub gateway_address: UDInt,
+    pub name_server: UDInt,
+    pub name_server_2: UDInt,
+    pub domain_name: CipString<48>,
 }
 
 impl InterfaceConfiguration {
@@ -185,7 +185,7 @@ pub struct TcpIpInterfaceInstance {
     configuration_control: DWord,
 
     #[attribute(id = 4, access = "get")]
-    phisical_link_object: PhysicalLink,
+    physical_link_object: PhysicalLink,
 
     #[attribute(id = 5, access = "set")]
     interface_configuration: InterfaceConfiguration,
@@ -196,6 +196,10 @@ pub struct TcpIpInterfaceInstance {
 
 #[cip_object_impl]
 impl TcpIpInterfaceInstance {
+    pub const SIN_FAMILY: u16 = AF_INET;
+    pub const SIN_PORT: u16 = EIP_RESERVED_PORT;
+    pub const SIN_ZERO: [u8; 8] = [0; 8];
+
     pub fn new(id: u16, address: Ipv4Addr) -> Self {
         let port_segment = PortSegment::from_port_and_ip(1, address);
         let physical_link = PhysicalLink::new(PaddedEPath::new(vec![Segment::Port(port_segment)]));
@@ -206,28 +210,13 @@ impl TcpIpInterfaceInstance {
             status: DWord::new(1),
             configuration_capability: DWord::new(0),
             configuration_control: DWord::new(0),
-            phisical_link_object: physical_link,
+            physical_link_object: physical_link,
             interface_configuration: InterfaceConfiguration::new(address),
             host_name: CipString::new(""),
         }
     }
 
-    pub fn sin_family(&self) -> u16 {
-        AF_INET
-    }
-
-    pub fn sin_addr(&self) -> [u8; 4] {
+    pub fn get_interface_configuration(&self) -> InterfaceConfiguration {
         self.interface_configuration
-            .ip_address
-            .value()
-            .to_be_bytes()
-    }
-
-    pub fn sin_port(&self) -> u16 {
-        EIP_RESERVED_PORT
-    }
-
-    pub fn sin_zero(&self) -> [u8; 8] {
-        [0; 8]
     }
 }
