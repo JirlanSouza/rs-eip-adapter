@@ -56,7 +56,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn register_and_get_class_by_id() {
+    fn registry_register_and_get_class_success() {
         let mut registry = Registry::new();
         let identity_class_id = ClassCode::Identity;
         let identity_info = IdentityInfo {
@@ -80,7 +80,51 @@ mod tests {
     }
 
     #[test]
-    fn register_and_get_identity_instance_success() {
+    fn registry_register_overwrite_success() {
+        let mut registry = Registry::new();
+        let identity_info_v1 = IdentityInfo {
+            vendor_id: 0x1111,
+            device_type: 0x2222,
+            product_code: 0x3333,
+            revision_major: 1,
+            revision_minor: 0,
+            serial_number: 0xDEAD_BEEF,
+            product_name: "DeviceV1",
+        };
+        let identity_class_v1 = IdentityClass::with_default_instance(&identity_info_v1);
+        registry.register(identity_class_v1);
+
+        let identity_info_v2 = IdentityInfo {
+            vendor_id: 0x1111,
+            device_type: 0x2222,
+            product_code: 0x3333,
+            revision_major: 2,
+            revision_minor: 0,
+            serial_number: 0xDEAD_BEEF,
+            product_name: "DeviceV2",
+        };
+        let identity_class_v2 = IdentityClass::with_default_instance(&identity_info_v2);
+        registry.register(identity_class_v2);
+
+        let retrieved_class = registry
+            .get(ClassCode::Identity.into())
+            .expect("class should be present");
+        assert_eq!(retrieved_class.name(), "Identity");
+
+        let identity_instance = registry
+            .get_instance::<IdentityInstance>(ClassCode::Identity, 1)
+            .expect("expected identity instance");
+        assert_eq!(identity_instance.revision.major, 2);
+    }
+
+    #[test]
+    fn registry_get_non_existent_returns_none() {
+        let registry = Registry::new();
+        assert!(registry.get(ClassCode::Identity.into()).is_none());
+    }
+
+    #[test]
+    fn registry_get_instance_identity_success() {
         let mut registry = Registry::new();
         let identity_info = IdentityInfo {
             vendor_id: 0x1234,
@@ -106,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn get_instance_missing_class_returns_error() {
+    fn registry_get_instance_class_not_found_fails() {
         let registry = Registry::new();
 
         let error_message = registry
@@ -117,7 +161,7 @@ mod tests {
     }
 
     #[test]
-    fn get_instance_missing_instance_returns_error() {
+    fn registry_get_instance_not_found_fails() {
         let mut registry = Registry::new();
         let identity_info = IdentityInfo {
             vendor_id: 0x0001,
@@ -139,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn get_instance_downcast_failure_returns_error() {
+    fn registry_get_instance_downcast_fails() {
         let mut registry = Registry::new();
         let tcp_class = Arc::new(TcpIpInterfaceClass::new());
         let tcp_instance = Arc::new(TcpIpInterfaceInstance::new(1, Ipv4Addr::LOCALHOST));
