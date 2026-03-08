@@ -19,7 +19,7 @@ pub fn ensure_field(
     };
 
     for field in &named_fields.named {
-        if field.ident.as_ref().map_or(true, |i| i != field_name) {
+        if field.ident.as_ref().is_none_or(|i| i != field_name) {
             continue;
         }
 

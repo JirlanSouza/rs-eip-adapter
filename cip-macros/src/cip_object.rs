@@ -20,7 +20,7 @@ pub fn cip_object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
             if !attr.path().is_ident("service") {
                 return true;
             }
-            
+
             let lit = match attr.parse_args::<LitInt>() {
                 Ok(lit) => lit,
                 Err(_) => {
@@ -48,7 +48,7 @@ pub fn cip_object_impl(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
 
-            return false;
+            false
         });
 
         if let Some(id) = service_id {

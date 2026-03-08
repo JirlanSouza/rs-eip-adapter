@@ -141,5 +141,5 @@ pub fn attributes_match(item: &mut ItemStruct) -> TokenStream {
         }
     };
 
-    TokenStream::from(expanded)
+    expanded
 }

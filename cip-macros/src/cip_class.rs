@@ -51,17 +51,15 @@ pub fn cip_class_derive_impl(item: TokenStream) -> TokenStream {
         ) {
             errors.push(e.to_compile_error());
         }
-    } else {
-        if let Err(e) = cip_utils::ensure_field(
-            struct_ident_span,
-            &input.fields,
-            "instances",
-            None,
-            "Non-singleton CipClass must have an 'instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>' field",
-            None,
-        ) {
-            errors.push(e.to_compile_error());
-        }
+    } else if let Err(e) = cip_utils::ensure_field(
+        struct_ident_span,
+        &input.fields,
+        "instances",
+        None,
+        "Non-singleton CipClass must have an 'instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>' field",
+        None,
+    ) {
+        errors.push(e.to_compile_error());
     }
 
     let id_path = args.id;
