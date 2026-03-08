@@ -41,8 +41,12 @@ impl ShortString {
         self.0[0] as usize
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn value(&self) -> &str {
-        if self.len() == 0 {
+        if self.is_empty() {
             return "";
         }
 

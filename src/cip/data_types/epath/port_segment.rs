@@ -14,6 +14,7 @@ pub enum PortIdentifier {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum LinkAddress {
     Default(u8),
     Extended(ShortString),
@@ -162,10 +163,8 @@ impl ToBytes for PortSegment {
 
         buffer.put_u8(first_byte.value());
 
-        if is_extended_link {
-            if let LinkAddress::Extended(link) = &self.link_address {
-                buffer.put_u8(link.len() as u8);
-            }
+        if is_extended_link && let LinkAddress::Extended(link) = &self.link_address {
+            buffer.put_u8(link.len() as u8);
         }
 
         if let PortIdentifier::Extended(port) = self.port {
