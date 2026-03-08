@@ -6,7 +6,7 @@ use crate::encap::cpf::cpf_item::CpfItem;
 pub mod cpf_item;
 pub mod identity_item;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Cpf {
     pub items: Vec<CpfItem>,
 }
@@ -20,12 +20,6 @@ impl Cpf {
 
     pub fn add_item(&mut self, item: CpfItem) {
         self.items.push(item);
-    }
-}
-
-impl Default for Cpf {
-    fn default() -> Self {
-        Self { items: Vec::new() }
     }
 }
 

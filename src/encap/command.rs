@@ -3,8 +3,9 @@ pub mod register_session;
 pub mod unregister_session;
 
 #[repr(u16)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum EncapsulationCommand {
+    #[default]
     Nop,
     ListServices,
     ListIdentity,

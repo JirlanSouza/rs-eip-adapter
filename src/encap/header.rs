@@ -6,8 +6,9 @@ use crate::{
 };
 
 #[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EncapsulationStatus {
+    #[default]
     Success = 0x0000,
     InvalidOrUnsupportedCommand = 0x0001,
     InsufficientMemory = 0x0002,
@@ -52,7 +53,7 @@ impl From<EncapsulationStatus> for u32 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EncapsulationHeader {
     pub command: EncapsulationCommand,
     pub length: u16,
@@ -76,7 +77,7 @@ impl EncapsulationHeader {
     pub fn clone_with_session_handle(&self, session_handle: u32) -> Self {
         Self {
             session_handle,
-            ..self.clone()
+            ..*self
         }
     }
 
@@ -84,7 +85,7 @@ impl EncapsulationHeader {
         Self {
             status: error.into(),
             length,
-            ..self.clone()
+            ..*self
         }
     }
 }
