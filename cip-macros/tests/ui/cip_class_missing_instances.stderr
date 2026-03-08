@@ -1,0 +1,13 @@
+error: Non-singleton CipClass must have an 'instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>' field
+  --> tests/ui/cip_class_missing_instances.rs:20:8
+   |
+20 | struct MyNormalClass {
+   |        ^^^^^^^^^^^^^
+
+error[E0609]: no field `instances` on type `&MyNormalClass`
+  --> tests/ui/cip_class_missing_instances.rs:18:10
+   |
+18 | #[derive(CipClass)]
+   |          ^^^^^^^^ unknown field
+   |
+   = note: this error originates in the derive macro `CipClass` (in Nightly builds, run with -Z macro-backtrace for more info)

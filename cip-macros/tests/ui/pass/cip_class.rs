@@ -1,6 +1,10 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
-use cip_macros::{cip_class, cip_instance, cip_object_impl};
+use bytes::Buf;
+use cip_macros::{CipClass, CipInstance, cip_object_impl};
 
 use crate::cip::{
     ClassCode,
@@ -11,13 +15,23 @@ use crate::cip::{
 #[path = "../../cip/mod.rs"]
 mod cip;
 
-#[cip_class(id = ClassCode::TcpIpInterface, name = "TCP/IP Interface", singleton = false)]
-pub struct TcpIpInterfaceClass {}
+#[derive(CipClass)]
+#[cip(id = ClassCode::TcpIpInterface, name = "TCP/IP Interface", singleton = false, custom_services = true)]
+pub struct TcpIpInterfaceClass {
+    pub instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>,
+}
 
 #[cip_object_impl]
-impl TcpIpInterfaceClass {}
+impl TcpIpInterfaceClass {
+    pub fn new() -> Self {
+        Self {
+            instances: RwLock::new(HashMap::new()),
+        }
+    }
+}
 
-#[cip_instance]
+#[derive(CipInstance)]
+#[cip(custom_services = true)]
 pub struct TcpIpInstance {
     id: u16,
     class_id: ClassCode,

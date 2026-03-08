@@ -1,17 +1,13 @@
-error: A struct must have a field 'id: u16' to use #[cip_instance]
-  --> tests/ui/cip_instance_missing_instance_id.rs:13:8
+error: A struct must have a field 'id: u16' to use #[derive(CipInstance)]
+  --> tests/ui/cip_instance_missing_instance_id.rs:15:8
    |
-13 | struct MyInstance {
+15 | struct MyInstance {
    |        ^^^^^^^^^^
 
 error[E0615]: attempted to take value of method `id` on type `&MyInstance`
-  --> tests/ui/cip_instance_missing_instance_id.rs:12:1
+  --> tests/ui/cip_instance_missing_instance_id.rs:14:10
    |
-12 | #[cip_instance]
-   | ^^^^^^^^^^^^^^^ method, not a field
+14 | #[derive(CipInstance)]
+   |          ^^^^^^^^^^^ method, not a field
    |
-   = note: this error originates in the attribute macro `cip_instance` (in Nightly builds, run with -Z macro-backtrace for more info)
-help: use parentheses to call the method
-   |
-12 | #[cip_instance]()
-   |                ++
+   = note: this error originates in the derive macro `CipInstance` (in Nightly builds, run with -Z macro-backtrace for more info)

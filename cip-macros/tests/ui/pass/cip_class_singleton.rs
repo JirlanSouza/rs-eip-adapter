@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
-use cip_macros::{cip_class, cip_instance, cip_object_impl};
+use bytes::Buf;
+use cip_macros::{CipClass, CipInstance, cip_object_impl};
 
 use crate::cip::{
     ClassCode,
@@ -11,13 +12,23 @@ use crate::cip::{
 #[path = "../../cip/mod.rs"]
 mod cip;
 
-#[cip_class(id = ClassCode::Identity, name = "Identity", singleton = true)]
-pub struct IdentityClass {}
+#[derive(CipClass)]
+#[cip(id = ClassCode::Identity, name = "Identity", singleton = true, custom_services = true)]
+pub struct IdentityClass {
+    pub instance: RwLock<Arc<dyn CipInstance>>,
+}
 
 #[cip_object_impl]
-impl IdentityClass {}
+impl IdentityClass {
+    pub fn new(instance: Arc<dyn CipInstance>) -> Self {
+        Self {
+            instance: RwLock::new(instance),
+        }
+    }
+}
 
-#[cip_instance]
+#[derive(CipInstance)]
+#[cip(custom_services = true)]
 pub struct IdentityInstance {
     id: u16,
     class_id: ClassCode,

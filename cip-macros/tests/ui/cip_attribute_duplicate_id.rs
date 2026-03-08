@@ -13,7 +13,14 @@ mod cip;
 
 #[derive(CipInstance)]
 struct MyInstance {
+    id: u16,
     class_id: ClassCode,
+
+    #[attribute(id = 0x01)]
+    first_attr: u32,
+
+    #[attribute(id = 0x01)]
+    second_attr: u32,
 }
 
 fn main() {}

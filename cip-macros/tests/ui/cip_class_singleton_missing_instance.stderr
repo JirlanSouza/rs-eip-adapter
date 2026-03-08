@@ -1,0 +1,13 @@
+error: Singleton CipClass must have an 'instance: RwLock<Arc<dyn CipInstance>>' field
+  --> tests/ui/cip_class_singleton_missing_instance.rs:20:8
+   |
+20 | struct MySingletonClass {
+   |        ^^^^^^^^^^^^^^^^
+
+error[E0609]: no field `instance` on type `&MySingletonClass`
+  --> tests/ui/cip_class_singleton_missing_instance.rs:18:10
+   |
+18 | #[derive(CipClass)]
+   |          ^^^^^^^^ unknown field
+   |
+   = note: this error originates in the derive macro `CipClass` (in Nightly builds, run with -Z macro-backtrace for more info)

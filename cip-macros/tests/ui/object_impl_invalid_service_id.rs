@@ -1,8 +1,10 @@
+#![allow(unused_imports)]
 use cip_macros::cip_object_impl;
 
 use crate::cip::{
+    ClassCode,
     error::CipError,
-    object::{CipObject, CipResult},
+    object::{CipClass, CipInstance, CipObject, CipResult},
 };
 
 #[path = "../cip/mod.rs"]
@@ -13,7 +15,7 @@ struct MyObject;
 #[cip_object_impl]
 impl MyObject {
     #[service("not_a_number")]
-    fn my_service(&self, _req: bytes::Bytes, _resp: &mut bytes::BytesMut) -> CipResult {
+    fn my_service(&mut self, _req: &mut bytes::Bytes, _resp: &mut bytes::BytesMut) -> CipResult {
         Ok(())
     }
 }

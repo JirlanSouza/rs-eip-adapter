@@ -1,0 +1,5 @@
+error: Unknown literal value `invalid_id`
+  --> tests/ui/cip_attribute_invalid_id_type.rs:19:22
+   |
+19 |     #[attribute(id = "invalid_id")]
+   |                      ^^^^^^^^^^^^

@@ -1,17 +1,25 @@
-use cip_macros::{cip_class, cip_object_impl};
+#![allow(unused_imports)]
+use bytes::Buf;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+
+use cip_macros::CipClass;
 
 use crate::cip::{
+    ClassCode,
     error::CipError,
-    object::{CipClass, CipObject, CipResult},
+    object::{CipClass, CipInstance, CipObject, CipResult},
 };
 
 #[path = "../cip/mod.rs"]
 mod cip;
 
-#[cip_class(name = "MyClass")]
-struct MyClass {}
-
-#[cip_object_impl]
-impl MyClass {}
+#[derive(CipClass)]
+#[cip(name = "MyClass")]
+struct MyClass {
+    pub instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>,
+}
 
 fn main() {}

@@ -14,7 +14,7 @@ struct MyObject;
 
 #[cip_object_impl]
 impl MyObject {
-    #[service()]
+    #[service(256)]
     fn my_service(&mut self, _req: &mut bytes::Bytes, _resp: &mut bytes::BytesMut) -> CipResult {
         Ok(())
     }

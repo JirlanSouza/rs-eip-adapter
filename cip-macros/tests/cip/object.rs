@@ -1,13 +1,17 @@
 use std::{any::Any, sync::Arc};
 
 use bytes::{Bytes, BytesMut};
-
 use super::{ClassCode, error::CipError};
 
 pub type CipResult = Result<(), CipError>;
 
 pub trait CipObject: Send + Sync {
-    fn execute_service(&self, service_id: u8, req: Bytes, resp: &mut BytesMut) -> CipResult;
+    fn execute_service(
+        &mut self,
+        service_id: u8,
+        req: &mut Bytes,
+        resp: &mut BytesMut,
+    ) -> CipResult;
 }
 
 pub trait CipClass: CipObject {

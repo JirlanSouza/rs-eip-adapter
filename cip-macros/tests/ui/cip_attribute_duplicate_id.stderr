@@ -1,0 +1,13 @@
+error: Duplicate attribute ID: 1
+  --> tests/ui/cip_attribute_duplicate_id.rs:22:5
+   |
+22 |     #[attribute(id = 0x01)]
+   |     ^
+
+error[E0599]: no method named `encode` found for type `u32` in the current scope
+  --> tests/ui/cip_attribute_duplicate_id.rs:14:10
+   |
+14 | #[derive(CipInstance)]
+   |          ^^^^^^^^^^^ method not found in `u32`
+   |
+   = note: this error originates in the derive macro `CipInstance` (in Nightly builds, run with -Z macro-backtrace for more info)

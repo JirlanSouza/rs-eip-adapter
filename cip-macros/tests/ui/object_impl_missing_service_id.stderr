@@ -1,5 +1,13 @@
 error: The #[service] attribute expects an ID of u8 (0-255) type. Ex: #[service(0x0E)]
-  --> tests/ui/object_impl_missing_service_id.rs:15:5
+  --> tests/ui/object_impl_missing_service_id.rs:17:5
    |
-15 |     #[service()]
+17 |     #[service()]
    |     ^
+
+error[E0599]: no method named `execute_attribute_service` found for mutable reference `&mut MyObject` in the current scope
+  --> tests/ui/object_impl_missing_service_id.rs:15:1
+   |
+15 | #[cip_object_impl]
+   | ^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the attribute macro `cip_object_impl` (in Nightly builds, run with -Z macro-backtrace for more info)

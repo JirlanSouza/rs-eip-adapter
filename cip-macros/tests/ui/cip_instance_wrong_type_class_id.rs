@@ -1,4 +1,6 @@
-use cip_macros::{cip_instance, cip_object_impl};
+#![allow(unused_imports)]
+use bytes::Buf;
+use cip_macros::CipInstance;
 
 use crate::cip::{
     ClassCode,
@@ -9,13 +11,10 @@ use crate::cip::{
 #[path = "../cip/mod.rs"]
 mod cip;
 
-#[cip_instance]
+#[derive(CipInstance)]
 struct MyInstance {
     id: u16,
     class_id: u16,
 }
-
-#[cip_object_impl]
-impl MyInstance {}
 
 fn main() {}

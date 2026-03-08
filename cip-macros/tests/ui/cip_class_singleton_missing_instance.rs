@@ -1,11 +1,10 @@
 #![allow(unused_imports)]
 use bytes::Buf;
+use cip_macros::CipClass;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
-
-use cip_macros::CipClass;
 
 use crate::cip::{
     ClassCode,
@@ -17,9 +16,10 @@ use crate::cip::{
 mod cip;
 
 #[derive(CipClass)]
-#[cip(id = ClassCode::Identity)]
-struct MyClass {
-    pub instances: RwLock<HashMap<u16, Arc<dyn CipInstance>>>,
+#[cip(id = ClassCode::Identity, name = "Singleton Class", singleton = true)]
+struct MySingletonClass {
+    // Missing `instance` field
+    pub other_field: u16,
 }
 
 fn main() {}

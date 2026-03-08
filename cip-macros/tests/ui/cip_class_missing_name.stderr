@@ -1,24 +1,7 @@
 error: Missing field `name`
-  --> tests/ui/cip_class_missing_name.rs:12:1
+  --> tests/ui/cip_class_missing_name.rs:19:10
    |
-12 | #[cip_class(id = ClassCode::Identity)]
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+19 | #[derive(CipClass)]
+   |          ^^^^^^^^
    |
-   = note: this error originates in the attribute macro `cip_class` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0412]: cannot find type `MyClass` in this scope
-  --> tests/ui/cip_class_missing_name.rs:16:6
-   |
-16 | impl MyClass {}
-   |      ^^^^^^^ not found in this scope
-
-warning: unused imports: `CipClass` and `ClassCode`
- --> tests/ui/cip_class_missing_name.rs:4:5
-  |
-4 |     ClassCode,
-  |     ^^^^^^^^^
-5 |     error::CipError,
-6 |     object::{CipClass, CipObject, CipResult},
-  |              ^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+   = note: this error originates in the derive macro `CipClass` (in Nightly builds, run with -Z macro-backtrace for more info)

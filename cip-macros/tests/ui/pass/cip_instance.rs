@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use cip_macros::{cip_instance, cip_object_impl};
+use bytes::Buf;
+use cip_macros::{CipInstance, cip_object_impl};
 
 use crate::cip::{
     ClassCode,
@@ -11,7 +12,8 @@ use crate::cip::{
 #[path = "../../cip/mod.rs"]
 mod cip;
 
-#[cip_instance]
+#[derive(CipInstance)]
+#[cip(custom_services = true)]
 pub struct IdentityInstance {
     id: u16,
     class_id: ClassCode,
@@ -33,7 +35,7 @@ fn main() {
     let instance_any = instace_arc.as_any_arc();
     let instance_downcasted_opt = instance_any.downcast_ref::<IdentityInstance>();
     let instance_downcasted = instance_downcasted_opt.expect("Failed to downcast");
-    
+
     assert_eq!(instance_downcasted.id(), 1);
     assert_eq!(instance_downcasted.class_id(), ClassCode::Identity);
 }
